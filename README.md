@@ -14,8 +14,8 @@ and then downloads and submits respective samples into the VMRay Analyzer for de
 ## Related VMRay Products
 The connector supports following VMRay products:
 
-Final Verdict
-Total Insight
+- Final Verdict
+- Total Insight
 
 ## Project Structure
 
