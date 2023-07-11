@@ -90,12 +90,14 @@ Edit the [vmray_conf.py](app/config/vmray_conf.py) [general_conf.py](app/config/
 | `USER_UUID` |  User UUID for case creation |  |
 | `COMMMENT_TO_DETECTION` | Update Detection with a comment [`True`/`False`]  | `True` |
 | `COMMENT_TO_QUARANTINE` | Update Quarantine with a comment [`True`/`False`]  | `True` |
-| `CONTAIN_HOST` | Contain host machine if a detection or quarantine file affect it [`True`/`False`]  | `True` |
+| `CONTAIN_HOST` | Contain host machine if a detection or quarantine file affect it [`True`/`False`]  | `False` |
 | `CREATE_CASE` | Create a Case if a detection or quarantine files when VMRay verdict hits one of CREATE_CASE_LEVELS | `False` |
 | `CREATE_CASE_LEVELS` | Case Creation level list from VMRay verdict | `[`VERDICT.SUSPICIOUS`/`VERDICT.MALICIOUS`]` |
 | `CASE_USERS` | User uuid that connector can open case RECOMMANDATION: Create a user for connector and follow the cases |  |
 | `FIND_ANOTHER_HOST` | Find another host with same IOC | `False` |
 | `FIND_ANOTHER_HOST_LEVELS` | Find another host with a IOC. level list from VMRay verdict | `[`VERDICT.SUSPICIOUS`/`VERDICT.MALICIOUS`]` |
+| `ADD_THREAT_CLASSIFICATION` | Add comment to Detection with found threat's classification | `True` |
+| `ADD_THREAT_NAME` | Add comment to Detection with found threat's name | `True` |
 
 ## Configuration for VMRay
 

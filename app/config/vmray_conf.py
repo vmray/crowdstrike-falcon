@@ -50,7 +50,7 @@ class VMRayConfig:
     ANALYSIS_TIMEOUT = 120
 
     # VMRay analysis job timeout for wait_submissions
-    ANALYSIS_JOB_TIMEOUT = 600
+    ANALYSIS_JOB_TIMEOUT = 3600
 
     # Analyzer mode for normal samples
     DEFAULT_ANALYZER_MODE = ANALYZER_MODE.REPUTATION_STATIC_DYNAMIC

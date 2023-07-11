@@ -526,7 +526,7 @@ class CrowdStrike:
         """
         try:
             response = self.quarantine_api.update_quarantined_detects_by_id(ids=quarantine_id, comment=comment, action=action)
-            if len(response['body']['errors']) > 0:
+            if response["status_code"] != 200 and len(response['body']['errors']) > 0:
                 self.log.error(f"Cannot update quarantine {quarantine_id} because of {response['body']['errors']}")    
 
         except:
@@ -546,7 +546,7 @@ class CrowdStrike:
             show_in_ui = True
         try:
             response = self.detect_api.update_detects_by_ids(ids=detection_id, comment=comment, status=status, show_in_ui=show_in_ui)
-            if len(response['body']['errors']) > 0:
+            if response["status_code"] != 200 and len(response['body']['errors']) > 0:
                 self.log.error(f"Cannot update detection {detection_id} because of {response['body']['errors']}")    
         except:
             self.log.error(f"Cannot update detection {detection_id}")

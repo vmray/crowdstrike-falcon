@@ -192,6 +192,8 @@ class VMRay:
         file_iocs = self.parse_file_iocs(iocs)
         network_iocs = self.parse_network_iocs(iocs)
         registry_iocs = self.parse_registry_iocs(iocs)
+        threat_classifications = self.parse_classifications(iocs)
+        threat_names = self.parse_threat_names(iocs)
 
         for key in process_iocs:
             ioc_data[key] = process_iocs[key]
@@ -204,6 +206,12 @@ class VMRay:
 
         for key in registry_iocs:
             ioc_data[key] = registry_iocs[key]
+        
+        for key in threat_classifications:
+            ioc_data[key] = threat_classifications[key]
+        
+        for key in threat_names:
+            ioc_data[key] = threat_names[key]
 
         return ioc_data
 
@@ -312,6 +320,48 @@ class VMRay:
 
         return network_iocs
 
+    def parse_classifications(self, iocs):
+        """
+            Parse classification IOC values from the raw IOC dict
+            :param iocs: dict object which contains raw IOC data about the sample
+            :return classification: classification of threat
+        """
+        self.log.debug("parse_classification function is invoked")
+        
+        classifications = {}
+        classifications_set = set()
+        
+        for ioc_type in iocs:
+            files = iocs[ioc_type]["iocs"]["files"]
+            for file in files:
+                if file["verdict"] in GeneralConfig.SELECTED_VERDICTS:
+                    for classification in file["classifications"]:
+                        classifications_set.add(classification)
+        classifications["classifications"] = classifications_set
+        
+        return classifications
+        
+    def parse_threat_names(self, iocs):
+        """
+            Parse threat name IOC values from the raw IOC dict
+            :param iocs: dict object which contains raw IOC data about the sample
+            :return threat_names: name of thread
+        """
+        self.log.debug("parse_threat_names function is invoked")
+        
+        threat_names = {}
+        threat_names_set = set()
+        
+        for ioc_type in iocs:
+            files = iocs[ioc_type]["iocs"]["files"]
+            for file in files:
+                if file["verdict"] in GeneralConfig.SELECTED_VERDICTS:
+                    for threat_name in file["threat_names"]:
+                        threat_names_set.add(threat_name)
+        threat_names["threat_names"] = threat_names_set
+        
+        return threat_names
+
     def submit_sample(self, sample:Sample):
         """
             Submit sample to VMRay Sandbox to analyze
@@ -367,9 +417,10 @@ class VMRay:
         # Adding timestamp and error_count for checking status and timeouts
         submission_objects = []
         for submission in submitted_samples:
-            submission_objects.append({"sample": submission,
-                                       "timestamp": None,
-                                       "error_count": 0})
+            if submission.downloaded_successfully:
+                submission_objects.append({"sample": submission,
+                                        "timestamp": None,
+                                        "error_count": 0})
 
         self.log.info(f"Waiting {len(submission_objects)} submission jobs to finish")
 
@@ -379,8 +430,9 @@ class VMRay:
             for submission_object in submission_objects:
                 try:
                     if not self.check_submission_error(submission_object['sample'].vmray_submission_id):
-                        raise Exception("Submission error")
-                    
+                        submission_object["error_count"] += 1
+                        self.log.error(f"Submission job {submission_object['sample'].vmray_submission_id} failed")
+                         
                     response = self.api.call(method, url.format(submission_object["sample"].vmray_submission_id))
                     # If submission is finished, return submission info and process sample report,IOC etc
                     if response["submission_finished"]:
@@ -402,13 +454,12 @@ class VMRay:
                         continue
 
                 except Exception as err:
-                    self.log.error(str(err).split(":")[0])
-
                     # If 5 errors are occured, return status as not finished else try again
                     if submission_object["error_count"] >= 5:
                         submission_object['sample'].vmray_submission_finished = False
                     else:
                         submission_object["error_count"] += 1
+                    self.log.error(str(err))
 
         self.log.info("Submission jobs finished")
 
@@ -478,5 +529,6 @@ class VMRay:
                     self.log.error(f"Analysis {analysis['analysis_id']} for submission {submission['submission_id']} has error: {analysis['analysis_result_str']}")
                     return False
         else:
+            self.log.error(f"Submission {submission['submission_id']} analyses couldn't retrieved from VMRay return is None")            
             return False
         return True

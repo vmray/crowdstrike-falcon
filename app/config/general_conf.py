@@ -25,7 +25,7 @@ class GeneralConfig:
     LOG_FILE_PATH = LOG_DIR / pathlib.Path("cs-connector.log")
 
     # Log verbosity level
-    LOG_LEVEL = log.DEBUG
+    LOG_LEVEL = log.INFO
 
     # Selected verdicts's values (!!!Because VMray report has a string value!!!) to process and report back to CrowdStrike
     SELECTED_VERDICTS = [VERDICT.MALICIOUS.value]

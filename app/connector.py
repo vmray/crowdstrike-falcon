@@ -1,4 +1,3 @@
-from calendar import c
 import logging as log
 import pathlib
 import time
@@ -108,6 +107,7 @@ def run():
                     log.debug(f"File {sample.sample_sha256} found in VMRay database. No need to submit again.")
                     sample.downloaded_successfully = True
                     sample.submitted_successfully = True
+                    sample.vmray_submit_successfully = True
                     vmray.add_sample_results(sample)
                     found_samples.append(sample)
             else:
@@ -171,14 +171,29 @@ def run():
             if CrowdStrikeConfig.COMMMENT_TO_DETECTION:
                 for detection in detection_objs:
                     if sample.vmray_verdict == VERDICT.MALICIOUS:
-                        # TODO change submission id with vmray web url
                         cs.update_detection(detection.detect_id, 
                                             comment=f"sample is malicious. detailed analysis can be found on VMRAY with the link {sample.vmray_metadata['sample_webif_url']}", 
                                             status='in_progress')
+                        if CrowdStrikeConfig.ADD_THREAT_CLASSIFICATION and len(list(sample.vmray_result['classifications'])) > 0:
+                            cs.update_detection(detection.detect_id, 
+                                                comment=f"Threat Classification : {list(sample.vmray_result['classifications'])[0]}", 
+                                                status='in_progress')
+                        if CrowdStrikeConfig.ADD_THREAT_NAME and len(list(sample.vmray_result['threat_names'])) > 0:
+                            cs.update_detection(detection.detect_id, 
+                                                comment=f"Threat Name : {list(sample.vmray_result['threat_names'])[0]}", 
+                                                status='in_progress')
                     if sample.vmray_verdict == VERDICT.SUSPICIOUS:
                         cs.update_detection(detection.detect_id, 
                                             comment=f"sample is suspicious. detailed analysis can be found on VMRAY with  the link {sample.vmray_metadata['sample_webif_url']}", 
                                             status='in_progress')
+                        if CrowdStrikeConfig.ADD_THREAT_CLASSIFICATION and len(list(sample.vmray_result['classifications'])) > 0:
+                            cs.update_detection(detection.detect_id, 
+                                                comment=f"Threat Classification : {list(sample.vmray_result['classifications'])[0]}", 
+                                                status='in_progress')
+                        if CrowdStrikeConfig.ADD_THREAT_NAME and len(list(sample.vmray_result['threat_names'])) > 0:
+                            cs.update_detection(detection.detect_id, 
+                                                comment=f"Threat Name : {list(sample.vmray_result['threat_names'])[0]}", 
+                                                status='in_progress')
                     if sample.vmray_verdict == VERDICT.CLEAN:
                         cs.update_detection(detection.detect_id, 
                                             comment='sample is clean.', 
@@ -230,9 +245,9 @@ def run():
         
     try:
         for sample in download_samples:
-            if pathlib.Path(sample.zipped_path).exists():
+            if sample.zipped_path != '' and pathlib.Path(sample.zipped_path).exists():
                 os.remove(sample.zipped_path)
-            if pathlib.Path(sample.unzipped_path).exists():
+            if sample.unzipped_path != '' and pathlib.Path(sample.unzipped_path).exists():
                 os.remove(sample.unzipped_path)
     except Exception as err:
         log.error(f"Unknown error occurred. Error {err}")

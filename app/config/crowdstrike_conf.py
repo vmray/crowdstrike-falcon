@@ -45,7 +45,7 @@ class CrowdStrikeConfig():
     COMMENT_TO_QUARANTINE = True
     
     # Contain host machine if a detection or quarantine file affect it
-    CONTAIN_HOST = True
+    CONTAIN_HOST = False
 
     # Contain host level from VMRay verdict
     CONTAIN_HOST_LEVELS = [VERDICT.SUSPICIOUS, VERDICT.MALICIOUS]
@@ -60,7 +60,13 @@ class CrowdStrikeConfig():
     CASE_USERS = '<EXAMPLE_USER_UUID>'
     
     # Find another host with same IOC
-    FIND_ANOTHER_HOST = False
+    FIND_ANOTHER_HOST = False 
     
     # Find another host event level list from VMRay verdict
     FIND_ANOTHER_HOST_LEVELS = [VERDICT.SUSPICIOUS, VERDICT.MALICIOUS]
+    
+    # Add Thread classification to detection object as comment
+    ADD_THREAD_CLASSIFICATION = True
+    
+    # Add thread name to detection object as comment
+    ADD_THREAD_NAME = True
