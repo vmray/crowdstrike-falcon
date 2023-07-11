@@ -1,7 +1,3 @@
-import io
-from random import sample
-from re import sub
-from socket import timeout
 import time
 import ipaddress
 from datetime import datetime
