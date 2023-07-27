@@ -4,6 +4,7 @@ from datetime import datetime
 
 from urllib.parse import urlparse
 import json
+import io
 
 from vmray.rest_api import VMRayRESTAPI
 
