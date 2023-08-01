@@ -31,7 +31,7 @@ class CrowdStrikeConfig():
 
     SELECTED_DATA_SOURCES = [DATA_SOURCE.DETECT, DATA_SOURCE.QUARANTINE]
 
-    TIME_SPAN = GeneralConfig.TIME_SPAN
+    TIME_SPAN = GeneralConfig.TIME_SPAN + 600
     """
 		###Action Configs
 	"""
@@ -65,8 +65,8 @@ class CrowdStrikeConfig():
     # Find another host event level list from VMRay verdict
     FIND_ANOTHER_HOST_LEVELS = [VERDICT.SUSPICIOUS, VERDICT.MALICIOUS]
     
-    # Add Thread classification to detection object as comment
-    ADD_THREAD_CLASSIFICATION = True
+    # Add Threat classification to detection object as comment
+    ADD_THREAT_CLASSIFICATION = True
     
-    # Add thread name to detection object as comment
-    ADD_THREAD_NAME = True
+    # Add threat name to detection object as comment
+    ADD_THREAT_NAME = True
