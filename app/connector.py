@@ -26,7 +26,7 @@ def run():
                     format='[%(asctime)s] [<pid:%(process)d> %(filename)s:%(lineno)s %(funcName)s] %(levelname)s %(message)s',
                     level=GeneralConfig.LOG_LEVEL)
     log.info(
-        '[CONNECTOR.PY] Started VMRAY Analyzer Connector for CrowdStrike Cloud')
+        '[CONNECTOR.PY] Started VMRAY Analyzer Connector for CrowdStrike Falcon')
 
     # Initializing and authenticating api instances
     cs = CrowdStrike(log)
@@ -172,7 +172,7 @@ def run():
                 for detection in detection_objs:
                     if sample.vmray_verdict == VERDICT.MALICIOUS:
                         cs.update_detection(detection.detect_id, 
-                                            comment=f"sample is malicious. detailed analysis can be found on VMRAY with the link {sample.vmray_metadata['sample_webif_url']}", 
+                                            comment=f"Vmray sample validation verdict: Malicious. Detailed analysis can be found on VMRAY with the link {sample.vmray_metadata['sample_webif_url']}", 
                                             status='in_progress')
                         if CrowdStrikeConfig.ADD_THREAT_CLASSIFICATION and len(list(sample.vmray_result['classifications'])) > 0:
                             cs.update_detection(detection.detect_id, 
@@ -184,7 +184,7 @@ def run():
                                                 status='in_progress')
                     if sample.vmray_verdict == VERDICT.SUSPICIOUS:
                         cs.update_detection(detection.detect_id, 
-                                            comment=f"sample is suspicious. detailed analysis can be found on VMRAY with  the link {sample.vmray_metadata['sample_webif_url']}", 
+                                            comment=f"Vmray sample validation verdict: Suspicious. detailed analysis can be found on VMRAY with  the link {sample.vmray_metadata['sample_webif_url']}", 
                                             status='in_progress')
                         if CrowdStrikeConfig.ADD_THREAT_CLASSIFICATION and len(list(sample.vmray_result['classifications'])) > 0:
                             cs.update_detection(detection.detect_id, 

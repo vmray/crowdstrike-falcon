@@ -82,7 +82,7 @@ class CrowdStrike:
         self.detect_api = Detects(
             client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
         if self.detect_api.authenticated() is not None:
-            self.log.info("CrowdStrike Detection API connected successfully!")
+            self.log.debug("CrowdStrike Detection API connected successfully!")
         else:
             self.log.error(
                 f"CrowdStrike Detection API could not connect! Check secrets and permissions!")
@@ -91,7 +91,7 @@ class CrowdStrike:
         self.quarantine_api = Quarantine(
             client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
         if self.quarantine_api is not None:
-            self.log.info("CrowdStrike Detection API connected successfully!")
+            self.log.debug("CrowdStrike Detection API connected successfully!")
         else:
             self.log.error(
                 f"CrowdStrike Detection API could not connect. Check secrets and permissions!")
@@ -100,14 +100,14 @@ class CrowdStrike:
         self.host_api = Hosts(client_id=self.config.CLIENT_ID,
                               client_secret=self.config.CLIENT_SECRET)
         if self.host_api is not None:
-            self.log.info("CrowdStrike Host API connected successfully!")
+            self.log.debug("CrowdStrike Host API connected successfully!")
         else:
             self.log.error(
                 f"CrowdStrike Host API could not connect. Check secrets and permissions!")
             raise Exception
         self.sample_api = SampleUploads(client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
         if self.sample_api is not None:
-            self.log.info(
+            self.log.debug(
                 "CrowdStrike SampleUpload API connected successfully!")
         else:
             self.log.error(
@@ -115,7 +115,7 @@ class CrowdStrike:
             raise Exception
         self.ods_api = ODS(client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
         if self.ods_api is not None:
-            self.log.info(
+            self.log.debug(
                 "CrowdStrike ODS API connected successfully!")
         else:
             self.log.error(
@@ -123,7 +123,7 @@ class CrowdStrike:
             raise Exception
         self.ioc_api = IOC(client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
         if self.ioc_api is not None:
-            self.log.info(
+            self.log.debug(
                 "CrowdStrike IOC API connected successfully!")
         else:
             self.log.error(
@@ -131,7 +131,7 @@ class CrowdStrike:
             raise Exception
         self.message_center_api = MessageCenter(client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
         if self.message_center_api is not None:
-            self.log.info(
+            self.log.debug(
                 "CrowdStrike Message Center API connected successfully!")
         else:
             self.log.error(
@@ -164,7 +164,7 @@ class CrowdStrike:
         quarantines_ids = quarantines_response['body']['resources']
         if len(quarantines_ids) == 0:
             self.log.info(
-                f"There is no quarantine files since {self.config.TIME_SPAN} seconds!")
+                f"No quarantine files in the last {self.config.TIME_SPAN} seconds!")
             return []
         quarantines_response = self.quarantine_api.get_quarantine_files(
             ids=quarantines_ids)
@@ -223,7 +223,7 @@ class CrowdStrike:
         detects_ids = detect_response['body']["resources"]
         if len(detects_ids) == 0:
             self.log.info(
-                f"There is no detect files since {self.config.TIME_SPAN} seconds!")
+                f"No detection files in the last {self.config.TIME_SPAN} seconds!")
             return []
         detect_response = self.detect_api.get_detect_summaries(ids=detects_ids)
         if len(detect_response['body']['errors']) > 0:
