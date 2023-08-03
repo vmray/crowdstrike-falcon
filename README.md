@@ -1,4 +1,4 @@
-# VMWare CrowdStrike Connector for VMRay Analyzer 
+# CrowdStrike Falcon Connector for VMRay Analyzer 
 
 **Latest Version:** 0.1 - **Release Date:** 22/06/2023
 
