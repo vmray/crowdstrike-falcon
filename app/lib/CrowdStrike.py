@@ -80,63 +80,80 @@ class CrowdStrike:
         """
         self.log.debug("authantication has been started!")
         self.detect_api = Detects(
-            client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
-        if self.detect_api.authenticated() is not None:
+            client_id=self.config.CLIENT_ID, 
+            client_secret=self.config.CLIENT_SECRET, 
+            base_url=self.config.BASE_URL)
+        if self.detect_api.authenticated():
             self.log.debug("CrowdStrike Detection API connected successfully!")
         else:
             self.log.error(
                 f"CrowdStrike Detection API could not connect! Check secrets and permissions!")
-            raise Exception
+            raise Exception("CrowdStrike Detection API could not connect! Check secrets and permissions!")
 
         self.quarantine_api = Quarantine(
-            client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
-        if self.quarantine_api is not None:
-            self.log.debug("CrowdStrike Detection API connected successfully!")
+            client_id=self.config.CLIENT_ID, 
+            client_secret=self.config.CLIENT_SECRET, 
+            base_url=self.config.BASE_URL)
+        if self.quarantine_api.authenticated():
+            self.log.debug("CrowdStrike Quarantine API connected successfully!")
         else:
             self.log.error(
-                f"CrowdStrike Detection API could not connect. Check secrets and permissions!")
-            raise Exception
+                f"CrowdStrike Quarantine API could not connect. Check secrets and permissions!")
+            raise Exception("CrowdStrike Quarantine API could not connect. Check secrets and permissions!")
 
         self.host_api = Hosts(client_id=self.config.CLIENT_ID,
-                              client_secret=self.config.CLIENT_SECRET)
-        if self.host_api is not None:
+                              client_secret=self.config.CLIENT_SECRET, 
+                              base_url=self.config.BASE_URL)
+        if self.host_api.authenticated():
             self.log.debug("CrowdStrike Host API connected successfully!")
         else:
             self.log.error(
                 f"CrowdStrike Host API could not connect. Check secrets and permissions!")
-            raise Exception
-        self.sample_api = SampleUploads(client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
-        if self.sample_api is not None:
+            raise Exception("CrowdStrike Host API could not connect. Check secrets and permissions!")
+        
+        self.sample_api = SampleUploads(client_id=self.config.CLIENT_ID, 
+                                        client_secret=self.config.CLIENT_SECRET, 
+                                        base_url=self.config.BASE_URL)
+        if self.sample_api.authenticated():
             self.log.debug(
                 "CrowdStrike SampleUpload API connected successfully!")
         else:
             self.log.error(
                 f"CrowdStrike SampleUpload API could not connect. Check secrets and permissions!")
-            raise Exception
-        self.ods_api = ODS(client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
-        if self.ods_api is not None:
+            raise Exception("CrowdStrike SampleUpload API could not connect. Check secrets and permissions!")
+        
+        self.ods_api = ODS(client_id=self.config.CLIENT_ID, 
+                           client_secret=self.config.CLIENT_SECRET, 
+                           base_url=self.config.BASE_URL)
+        if self.ods_api.authenticated():
             self.log.debug(
                 "CrowdStrike ODS API connected successfully!")
         else:
             self.log.error(
                 f"CrowdStrike ODS API could not connect. Check secrets and permissions!")
-            raise Exception
-        self.ioc_api = IOC(client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
-        if self.ioc_api is not None:
-            self.log.debug(
+            raise Exception("CrowdStrike ODS API could not connect. Check secrets and permissions!")
+        
+        self.ioc_api = IOC(client_id=self.config.CLIENT_ID, 
+                           client_secret=self.config.CLIENT_SECRET,
+                           base_url=self.config.BASE_URL)
+        if self.ioc_api.authenticated():
+            self.log.info(
                 "CrowdStrike IOC API connected successfully!")
         else:
             self.log.error(
                 f"CrowdStrike IOC API could not connect. Check secrets and permissions!")
-            raise Exception
-        self.message_center_api = MessageCenter(client_id=self.config.CLIENT_ID, client_secret=self.config.CLIENT_SECRET)
-        if self.message_center_api is not None:
-            self.log.debug(
+            raise Exception("CrowdStrike IOC API could not connect. Check secrets and permissions!")
+        
+        self.message_center_api = MessageCenter(client_id=self.config.CLIENT_ID, 
+                                                client_secret=self.config.CLIENT_SECRET, 
+                                                base_url=self.config.BASE_URL)
+        if self.message_center_api.authenticated():
+            self.log.info(
                 "CrowdStrike Message Center API connected successfully!")
         else:
             self.log.error(
                 f"CrowdStrike Message Center API could not connect. Check secrets and permissions!")
-            raise Exception
+            raise Exception("CrowdStrike Message Center API could not connect. Check secrets and permissions!")
 
     def get_quarantines(self) -> list[ConnectorQuarantine]:
         """

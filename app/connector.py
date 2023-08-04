@@ -29,7 +29,10 @@ def run():
         '[CONNECTOR.PY] Started VMRAY Analyzer Connector for CrowdStrike Falcon')
 
     # Initializing and authenticating api instances
-    cs = CrowdStrike(log)
+    try:
+        cs = CrowdStrike(log)
+    except Exception as e:
+        return
     vmray = VMRay(log)
 
     # Creating list object for quarantines
@@ -255,7 +258,10 @@ def run():
 if __name__ == "__main__":
     if GeneralConfig.RUNTIME_MODE == RUNTIME_MODE.DOCKER:
         while True:
-            run()
+            try:
+                run()
+            except Exception as err:
+                continue       
             log.info(f"Sleeping {GeneralConfig.TIME_SPAN} seconds.")
             time.sleep(GeneralConfig.TIME_SPAN)
 
