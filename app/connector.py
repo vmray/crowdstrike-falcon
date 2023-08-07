@@ -178,24 +178,28 @@ def run():
                                             comment=f"Vmray sample validation verdict: Malicious. Detailed analysis can be found on VMRAY with the link {sample.vmray_metadata['sample_webif_url']}", 
                                             status='in_progress')
                         if CrowdStrikeConfig.ADD_THREAT_CLASSIFICATION and len(list(sample.vmray_result['classifications'])) > 0:
+                            threat_classification = "\n".join(sample.vmray_result['classifications'])
                             cs.update_detection(detection.detect_id, 
-                                                comment=f"Threat Classification : {list(sample.vmray_result['classifications'])[0]}", 
+                                                comment=f"Threat Classification : {threat_classification}", 
                                                 status='in_progress')
                         if CrowdStrikeConfig.ADD_THREAT_NAME and len(list(sample.vmray_result['threat_names'])) > 0:
+                            threat_names = "\n".join(sample.vmray_result['threat_names'])
                             cs.update_detection(detection.detect_id, 
-                                                comment=f"Threat Name : {list(sample.vmray_result['threat_names'])[0]}", 
+                                                comment=f"Threat Name : {threat_names}", 
                                                 status='in_progress')
                     if sample.vmray_verdict == VERDICT.SUSPICIOUS:
                         cs.update_detection(detection.detect_id, 
                                             comment=f"Vmray sample validation verdict: Suspicious. detailed analysis can be found on VMRAY with  the link {sample.vmray_metadata['sample_webif_url']}", 
                                             status='in_progress')
                         if CrowdStrikeConfig.ADD_THREAT_CLASSIFICATION and len(list(sample.vmray_result['classifications'])) > 0:
+                            threat_classification = "\n".join(sample.vmray_result['classifications'])
                             cs.update_detection(detection.detect_id, 
-                                                comment=f"Threat Classification : {list(sample.vmray_result['classifications'])[0]}", 
+                                                comment=f"Threat Classification : {threat_classification}", 
                                                 status='in_progress')
                         if CrowdStrikeConfig.ADD_THREAT_NAME and len(list(sample.vmray_result['threat_names'])) > 0:
+                            threat_names = "\n".join(sample.vmray_result['threat_names'])                            
                             cs.update_detection(detection.detect_id, 
-                                                comment=f"Threat Name : {list(sample.vmray_result['threat_names'])[0]}", 
+                                                comment=f"Threat Name : {threat_names}", 
                                                 status='in_progress')
                     if sample.vmray_verdict == VERDICT.CLEAN:
                         cs.update_detection(detection.detect_id, 
