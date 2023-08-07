@@ -462,12 +462,12 @@ class CrowdStrike:
                 if not self.check_ioc(type="sha256", value=found_sha256):
                     response = self.ioc_api.indicator_create(action='prevent',
                                                              type='sha256', 
-                                                             value=sample.sample_sha256, 
+                                                             value=found_sha256, 
                                                              applied_globally=True,
                                                              severity='high',
                                                              platforms=['mac','windows','linux'],
                                                              tags=['VMRAY'],
-                                                             description=f'IOC for {sample.sample_sha256} found by VMRAY')
+                                                             description=f'IOC for {found_sha256} found by VMRAY')
                     if len(response['body']['errors']) > 0:
                         self.log.error(f"Cannot create ioc {found_sha256} because of {response['body']['errors']}")
                         
