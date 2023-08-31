@@ -1,18 +1,18 @@
-# CrowdStrike Falcon Connector for VMRay Analyzer 
+# CrowdStrike Falcon Connector for VMRay 
 
 **Latest Version:** 0.1 - **Release Date:** 22/06/2023
 
 ## Overview
 
-This project is an integration between CrowdStrike Cloud and VMRay. It allows to enrich created detections as well as to build an extra line of defence to detects threats. Depending on configuration the Connector collects uniqie SHA256 hash values from:
+This project integrates CrowdStrike Falcon Insight XDR and VMRay FinalVerdict / TotalInsight. It equips customers with extra intel regarding the threats detected by CrowdStrike Falcon Insight XDR on their endpoints. Depending on the configuration, the Connector collects unique SHA256 hash values from:
 
 - Detections
 - Quarantines
 
-and then downloads and submits respective samples into the VMRay Analyzer for detonation and deep dynamic analysis. After the submission it retrieves the verdict and IOC values from VMRay and update Detection and Quarantine Objects, create IOC, contain(quarantine) machine if needed.
+It then downloads and submits respective samples into the VMRay Analyzer for detonation and deep dynamic analysis. After the submission, it retrieves the verdict and IOC values from VMRay and updates Detection and Quarantine Objects, creates IOC, and contains (quarantines) machine if needed.
 
 ## Related VMRay Products
-The connector supports following VMRay products:
+The connector supports the following VMRay products:
 
 - Final Verdict
 - Total Insight
@@ -41,7 +41,7 @@ The connector supports following VMRay products:
 
 ## Requirements
 - Python >3.10 with required packages ([Required Packages](app/requirements.txt))
-- CrowdStrike Cloud
+- CrowdStrike Falcon Insight XDR
 - VMRay Analyzer
 - Docker (optional)
 
@@ -59,9 +59,9 @@ Edit the [vmray_conf.py](app/config/vmray_conf.py) [general_conf.py](app/config/
 
 ## Configuration
 
-### CrowdStrike Cloud Configurations
+### CrowdStrike Falcon Insight XDR
 
-- Create Custom Access Level with the permissions below with web interface for API at Create API section. (`Support and Resources > API client and keys`)
+- Create a Custom Access Level with the permissions below with a web interface for API at Create API section. (`Support and Resources > API client and keys`)
 
 |       Scope       |    Read   |       Write       	 |
 |:---------------------|:--------------------:|:-----------------------:|
@@ -90,12 +90,12 @@ Edit the [vmray_conf.py](app/config/vmray_conf.py) [general_conf.py](app/config/
 | `USER_UUID` |  User UUID for case creation |  |
 | `COMMMENT_TO_DETECTION` | Update Detection with a comment [`True`/`False`]  | `True` |
 | `COMMENT_TO_QUARANTINE` | Update Quarantine with a comment [`True`/`False`]  | `True` |
-| `CONTAIN_HOST` | Contain host machine if a detection or quarantine file affect it [`True`/`False`]  | `False` |
-| `CREATE_CASE` | Create a Case if a detection or quarantine files when VMRay verdict hits one of CREATE_CASE_LEVELS | `False` |
+| `CONTAIN_HOST` | Contain host machine if a detection or quarantine file affects it [`True`/`False`]  | `False` |
+| `CREATE_CASE` | Create a Case if a detection or quarantine files when the VMRay verdict hits one of CREATE_CASE_LEVELS | `False` |
 | `CREATE_CASE_LEVELS` | Case Creation level list from VMRay verdict | `[`VERDICT.SUSPICIOUS`/`VERDICT.MALICIOUS`]` |
-| `CASE_USERS` | User uuid that connector can open case RECOMMANDATION: Create a user for connector and follow the cases |  |
+| `CASE_USERS` | User uuid that connector can open case RECOMMENDATION: Create a user for connector and follow the cases |  |
 | `FIND_ANOTHER_HOST` | Find another host with same IOC | `False` |
-| `FIND_ANOTHER_HOST_LEVELS` | Find another host with a IOC. level list from VMRay verdict | `[`VERDICT.SUSPICIOUS`/`VERDICT.MALICIOUS`]` |
+| `FIND_ANOTHER_HOST_LEVELS` | Find another host with an IOC. level list from VMRay verdict | `[`VERDICT.SUSPICIOUS`/`VERDICT.MALICIOUS`]` |
 | `ADD_THREAT_CLASSIFICATION` | Add comment to Detection with found threat's classification | `True` |
 | `ADD_THREAT_NAME` | Add comment to Detection with found threat's name | `True` |
 
@@ -136,15 +136,15 @@ Edit the [vmray_conf.py](app/config/vmray_conf.py) [general_conf.py](app/config/
 
 ## Running with CLI
 
-You can start connector with command line after completing the configurations. You need to set `RUNTIME_MODE` as `RUNTIME_MODE.CLI` in the `GeneralConfig`. Also you can create cron job for continuous processing.
+You can start the connector with the command line after completing the configurations. You need to set `RUNTIME_MODE` as `RUNTIME_MODE.CLI` in the `GeneralConfig`. Also, you can create a cron job for continuous processing.
     
     python connector.py
 
 ## Running with Docker
 
-You can create and start Docker image with Dockerfile after completing the configurations. You need to set `RUNTIME_MODE` as `RUNTIME_MODE.DOCKER` in the `GeneralConfig`.
+You can create and start a Docker image with Dockerfile after completing the configurations. You need to set `RUNTIME_MODE` as `RUNTIME_MODE.DOCKER` in the `GeneralConfig`.
 
     docker build -t cs_connector .
     docker run -d -v $(pwd)/log:/app/log -t cs_connector
 
-After running the Docker container you can see connector logs in the log directory on your host machine.
+After running the Docker container, you can see connector logs in the log directory on your host machine.
