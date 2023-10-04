@@ -211,7 +211,7 @@ def run():
                 cs.create_ioc(sample=sample)
             
             # add comment to quarantine and detirmine status if clean release, if malicious delete, if suspicious unrelease
-            if CrowdStrikeConfig.COMMENT_TO_QUARANTINE:
+            if quarantine_obj is not None and CrowdStrikeConfig.COMMENT_TO_QUARANTINE:
                 if sample.vmray_verdict == VERDICT.MALICIOUS:
                     cs.update_quarantine(quarantine_obj.quarantine_id, 
                                          comment=f"quarantine is malicious. See result on {sample.vmray_metadata['sample_webif_url']}", 
