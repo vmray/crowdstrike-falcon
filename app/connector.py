@@ -60,6 +60,7 @@ def run():
         # Retrieving quarantine files from CrowdStrike
         try:
             quarantines.extend(cs.get_quarantines())
+            log.info(f"Extracted hash from quarantines: {cs.extract_hash_from_quarantines(quarantines)}")
             hash_list.update(cs.extract_hash_from_quarantines(quarantines))
         except Exception as e:
             log.error(
@@ -69,6 +70,7 @@ def run():
         # Retrieving detects from CrowdStrike
         try:
             detects.extend(cs.get_detects())
+            log.info(f"Extracted hash from detects: {cs.extract_hashes_from_detects(detects)}")
             hash_list.update(cs.extract_hashes_from_detects(detects))
         except Exception as e:
             log.error(
