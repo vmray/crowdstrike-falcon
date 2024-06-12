@@ -1,6 +1,6 @@
 # CrowdStrike Falcon Connector for VMRay 
 
-**Latest Version:** 0.1 - **Release Date:** 22/06/2023
+**Latest Version:** 1.1 - **Release Date:** 11/06/2024
 
 ## Overview
 
