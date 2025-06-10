@@ -112,7 +112,7 @@ Edit the [vmray_conf.py](app/config/vmray_conf.py) [general_conf.py](app/config/
 | `URL`| URL of VMRay instance | `https://eu.cloud.vmray.com` |
 |`ConnectorName`| User Agent string for VMRay Api requests | `CrowdStrikeCloudConnector` |
 | `SSL_VERIFY`| Enable or disable certificate verification [`True`/`False`] | `True` |
-| `SUBMISSION_COMMENT`| Comment for submitted samples | `Sample from VMRay CarbonBlack Connector` |
+| `SUBMISSION_COMMENT`| Comment for submitted samples | `Sample from VMRay CrowdStrike Connector` |
 | `SUBMISSION_TAGS`| Tags for submitted samples | `CrowdStrike` |
 | `ANALYSIS_TIMEOUT`| Timeout for submission analyses as seconds | `120` |
 | `ANALYSIS_JOB_TIMEOUT`| Max job count for submissions | `600` |
