@@ -9,7 +9,7 @@ This project integrates CrowdStrike Falcon Insight XDR and VMRay FinalVerdict / 
 - Detections
 - Quarantines
 
-It then downloads and submits respective samples into the VMRay Analyzer for detonation and deep dynamic analysis. After the submission, it retrieves the verdict and IOC values from VMRay and updates Detection and Quarantine Objects, creates IOC, and contains (quarantines) machine if needed.
+It then downloads and submits respective samples into the VMRay Analyzer for detonation and deep dynamic analysis. After the submission, it retrieves the verdict and IOC values from VMRay and updates Detection and Quarantine Objects, and creates IOCs.
 
 ## Related VMRay Products
 The connector supports the following VMRay products:
@@ -21,22 +21,24 @@ The connector supports the following VMRay products:
 
     app                             # Main project directory
     ├─── config                     # Configuration directory
-    │   └─── __init__.py 			
-    │   └─── crowdstike_conf.py     # CrowdStrike configuration file
+    │   └─── __init__.py
+    │   └─── crowdstrike_conf.py    # CrowdStrike configuration file
     │   └─── general_conf.py        # General configuration file
-    │   └─── crowdstike_conf.py     # VMRay configuration file    
+    │   └─── vmray_conf.py          # VMRay configuration file
     ├─── downloads                  # Directory for extracted binaries
     ├─── lib                        # Library directory
-    │   └─── __init__.py 				
-    │   └─── CrowdStrike.py         # Crowdstrike API functions
+    │   └─── __init__.py
+    │   └─── CrowdStrike.py         # CrowdStrike API functions
     │   └─── VMRay.py               # VMRay API functions
-    │   └─── Sample.py              # Sample class for controlling the samples
+    │   └─── Sample.py              # Sample class for tracking samples through the pipeline
     ├─── log                        # Log directory for connector
-        └─── cs-connector.log       # Log file for connector
+    │   └─── cs-connector.log       # Log file for connector
     └─── __init__.py
     └─── connector.py               # Main connector application
     └─── requirements.txt           # Python library requirements
-    └─── log                        # Log directory for Docker volume
+    .env.example                    # Example environment variable file
+    Dockerfile                      # Docker build file
+    docker-entrypoint.sh            
 
 
 ## Requirements
@@ -53,9 +55,13 @@ Clone the repository into a local folder.
 
 Install the requirements.
 
-    pip install -r requirements.txt
-    
-Edit the [vmray_conf.py](app/config/vmray_conf.py) [general_conf.py](app/config/general_conf.py) [crowdstrike_conf.py](app/config/crowdstrike_conf.py)files and update with your configurations.
+    pip install -r app/requirements.txt
+
+Copy `.env.example` to `.env` and populate your credentials:
+
+    cp .env.example .env
+
+Edit the [vmray_conf.py](app/config/vmray_conf.py), [general_conf.py](app/config/general_conf.py), and [crowdstrike_conf.py](app/config/crowdstrike_conf.py) files and update with your configurations.
 
 ## Configuration
 
@@ -67,37 +73,23 @@ Edit the [vmray_conf.py](app/config/vmray_conf.py) [general_conf.py](app/config/
 |:---------------------|:--------------------:|:-----------------------:|
 | Alerts               | :ballot_box_with_check: | :ballot_box_with_check: |
 | Detections    | :ballot_box_with_check: | :ballot_box_with_check: |
-| Hosts    | :ballot_box_with_check: | :ballot_box_with_check: |
-|  Host groups     | :ballot_box_with_check:   | :ballot_box_with_check: |
-|  Incidents  |  :ballot_box_with_check: |  :ballot_box_with_check: |
-|  IOC Management  | :ballot_box_with_check: | :ballot_box_with_check: | 
-|  IOCs (Indicators of Compromise) | :ballot_box_with_check: | :ballot_box_with_check: | 
-|  On-demand scans (ODS)  | :ballot_box_with_check: | :ballot_box_with_check: | 
-|  Quarantined Files  | :ballot_box_with_check: | :ballot_box_with_check: | 
+|  IOC Management  | :ballot_box_with_check: | :ballot_box_with_check: |
+|  IOCs (Indicators of Compromise) | :ballot_box_with_check: | :ballot_box_with_check: |
+|  Quarantined Files  | :ballot_box_with_check: | :ballot_box_with_check: |
 | Sample uploads | :ballot_box_with_check: | :ballot_box_with_check: |
-|  User management | :ballot_box_with_check: | :ballot_box_with_check: |
 
 ## Configuration for CrowdStrike
 - Edit the `CrowdStrikeConfig` class in [crowdstrike_conf.py](app/config/crowdstrike_conf.py) file
 
 | Configuration Item  | Description       | Default |
 |:--------------------|:-----------------------------------|:-------------|
-| `CLIENT_ID`       | Client ID | None |
-| `CLIENT_SECRET`   | Client Secret | None | 
-| `BASE_URL`           | CrowdStrike Cloud base url | `https://api.us-2.crowdstrike.com`|
+| `CLIENT_ID`       | Client ID (set via `CROWDSTRIKE_CLIENT_ID` env var) | None |
+| `CLIENT_SECRET`   | Client Secret (set via `CROWDSTRIKE_CLIENT_SECRET` env var) | None |
+| `BASE_URL`           | CrowdStrike Cloud base URL (override via `CROWDSTRIKE_BASE_URL` env var) | `https://api.us-2.crowdstrike.com` |
 | `DOWNLOAD_DIR`        | Directory path for sample downloads | `downloads` |
 | `SELECTED_DATA_SOURCES` | Selected CrowdStrike data source  | [`DATA_SOURCE.DETECT`, `DATA_SOURCE.QUARANTINE`] |
-| `USER_UUID` |  User UUID for case creation |  |
-| `COMMMENT_TO_DETECTION` | Update Detection with a comment [`True`/`False`]  | `True` |
+| `COMMENT_TO_DETECTION` | Update Detection with a comment [`True`/`False`]  | `True` |
 | `COMMENT_TO_QUARANTINE` | Update Quarantine with a comment [`True`/`False`]  | `True` |
-| `CONTAIN_HOST` | Contain host machine if a detection or quarantine file affects it [`True`/`False`]  | `False` |
-| `CREATE_CASE` | Create a Case if a detection or quarantine files when the VMRay verdict hits one of CREATE_CASE_LEVELS | `False` |
-| `CREATE_CASE_LEVELS` | Case Creation level list from VMRay verdict | `[`VERDICT.SUSPICIOUS`/`VERDICT.MALICIOUS`]` |
-| `CASE_USERS` | User uuid that connector can open case RECOMMENDATION: Create a user for connector and follow the cases |  |
-| `FIND_ANOTHER_HOST` | Find another host with same IOC | `False` |
-| `FIND_ANOTHER_HOST_LEVELS` | Find another host with an IOC. level list from VMRay verdict | `[`VERDICT.SUSPICIOUS`/`VERDICT.MALICIOUS`]` |
-| `ADD_THREAT_CLASSIFICATION` | Add comment to Detection with found threat's classification | `True` |
-| `ADD_THREAT_NAME` | Add comment to Detection with found threat's name | `True` |
 
 ## Configuration for VMRay
 
@@ -108,17 +100,16 @@ Edit the [vmray_conf.py](app/config/vmray_conf.py) [general_conf.py](app/config/
 | Configuration Item  | Description       | Default |
 |:--------------------|:-----------------------------------|:-------------|
 | `API_KEY_TYPE`| Enum for VMRay API Key Type [`REPORT`/`VERDICT`] | `REPORT` |
-| `API_KEY`| API Key |  |
-| `URL`| URL of VMRay instance | `https://eu.cloud.vmray.com` |
-|`ConnectorName`| User Agent string for VMRay Api requests | `CrowdStrikeCloudConnector` |
+| `API_KEY`| API Key (set via `VMRAY_API_KEY` env var) |  |
+| `URL`| URL of VMRay instance (override via `VMRAY_URL` env var) | `https://us.cloud.vmray.com` |
+| `CONNECTOR_NAME`| User Agent string for VMRay API requests | `CrowdStrikeCloudConnector` |
 | `SSL_VERIFY`| Enable or disable certificate verification [`True`/`False`] | `True` |
 | `SUBMISSION_COMMENT`| Comment for submitted samples | `Sample from VMRay CrowdStrike Connector` |
-| `SUBMISSION_TAGS`| Tags for submitted samples | `CrowdStrike` |
-| `ANALYSIS_TIMEOUT`| Timeout for submission analyses as seconds | `120` |
-| `ANALYSIS_JOB_TIMEOUT`| Max job count for submissions | `600` |
-| `DEFAULT_ANALYZER_MODE`| Analyzer mode for normal samples | `reputation_static_dynamic` |
-| `RESUBMIT`| Resubmission status which has been already analyzed by VMRay [`True`/`False`] | `False` |
-| `RESUBMISSION_VERDICTS`| Selected verdicts to resubmit evidences | `[malicious, suspicious]` |
+| `SUBMISSION_TAGS`| Tags for submitted samples (no spaces allowed) | `["CrowdStrike"]` |
+| `ANALYSIS_TIMEOUT`| Timeout for individual submission analyses in seconds | `120` |
+| `ANALYSIS_JOB_TIMEOUT`| Maximum total wait time for submission completion in seconds | `600` |
+| `RESUBMIT`| Re-analyze samples already seen by VMRay [`True`/`False`] | `True` |
+| `RESUBMISSION_VERDICTS`| Verdicts that trigger resubmission | `[VERDICT.MALICIOUS, VERDICT.SUSPICIOUS]` |
 
 ## General Connector Configurations
 
@@ -126,11 +117,11 @@ Edit the [vmray_conf.py](app/config/vmray_conf.py) [general_conf.py](app/config/
 
 | Configuration Item  | Description       | Default |
 |:--------------------|:-----------------------------------|:-------------|
-| `LOG_FILE_PATH`| Connector log file path | `cs-connector.log` |
-| `LOG LEVEL`| Logging verbosity level | `DEBUG` |
-| `SELECTED_VERDICTS`| Selected verdicts to process and report back to CrowdStrike Cloud | `malicious` |
-| `TIME_SPAN`| Time span between script iterations as seconds | `10800`|
-| `RUNTIME_MODE`| Runtime mode for script | `DOCKER` |
+| `LOG_FILE_PATH`| Connector log file path | `app/log/cs-connector.log` |
+| `LOG_LEVEL`| Logging verbosity level | `DEBUG` |
+| `SELECTED_VERDICTS`| Verdicts to process and report back to CrowdStrike | `["malicious"]` |
+| `TIME_SPAN`| Time span between script iterations in seconds | `10800` |
+| `RUNTIME_MODE`| Runtime mode for script [`CLI`/`DOCKER`] | `DOCKER` |
 
 # Running the Connector
 
@@ -145,6 +136,6 @@ You can start the connector with the command line after completing the configura
 You can create and start a Docker image with Dockerfile after completing the configurations. You need to set `RUNTIME_MODE` as `RUNTIME_MODE.DOCKER` in the `GeneralConfig`.
 
     docker build -t cs_connector .
-    docker run -d -v $(pwd)/log:/app/log -t cs_connector
+    docker run -d -v $(pwd)/log:/app/log --env-file .env -t cs_connector
 
 After running the Docker container, you can see connector logs in the log directory on your host machine.

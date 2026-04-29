@@ -1,7 +1,6 @@
-from typing import Any
 from config.crowdstrike_conf import CrowdStrikeConfig
 from datetime import datetime, timedelta
-from falconpy import Detects, Quarantine, Hosts, SampleUploads, ODS, IOC, MessageCenter
+from falconpy import Alerts, Quarantine, SampleUploads, IOC
 import pathlib
 import hashlib
 import zipfile
@@ -10,9 +9,9 @@ from lib.Sample import Sample
 
 class ConnectorDetect:
     """
-      Detect Class to keep detects as an object in connector.
+      Alert Class to keep alerts as an object in connector.
     """
-    detect_id: str = ""
+    composite_id: str = ""
     timestamp: datetime = None
     host_id: str = ""
     included_sha256: str = ""
@@ -20,8 +19,8 @@ class ConnectorDetect:
     device_id: str = ""
     file_path: str = ""
 
-    def __init__(self, detect_id, timestamp, host_id, included_sha256, os_version, device_id, file_path) -> None:
-        self.detect_id = detect_id
+    def __init__(self, composite_id, timestamp, host_id, included_sha256, os_version, device_id, file_path) -> None:
+        self.composite_id = composite_id
         self.timestamp = timestamp
         self.host_id = host_id
         self.included_sha256 = included_sha256
@@ -30,7 +29,7 @@ class ConnectorDetect:
         self.file_path = file_path
 
     def __str__(self):
-        return f" Detect ID : {self.detect_id}, Created Time : {self.timestamp}, Host ID: {self.host_id}, sha256: {self.included_sha256}, host OS: {self.os_version}, device id: {self.device_id}"
+        return f" Composite ID : {self.composite_id}, Created Time : {self.timestamp}, Host ID: {self.host_id}, sha256: {self.included_sha256}, host OS: {self.os_version}, device id: {self.device_id}"
 
 
 class ConnectorQuarantine:
@@ -63,32 +62,29 @@ class CrowdStrike:
     """
 
     def __init__(self, log):
-        self.detect_api = None
+        self.alerts_api = None
         self.quarantine_api = None
-        self.host_api = None
         self.sample_api = None
-        self.ods_api = None
         self.ioc_api = None
-        self.message_center_api = None
         self.log = log
         self.config = CrowdStrikeConfig
-        self._authanticate()
+        self._authenticate()
 
-    def _authanticate(self):
+    def _authenticate(self):
         """
-          authanticate with Detect, Quarantine and Host services
+          authenticate with Alerts, Quarantine and Host services
         """
-        self.log.debug("authantication has been started!")
-        self.detect_api = Detects(
-            client_id=self.config.CLIENT_ID, 
-            client_secret=self.config.CLIENT_SECRET, 
+        self.log.debug("authentication has been started!")
+        self.alerts_api = Alerts(
+            client_id=self.config.CLIENT_ID,
+            client_secret=self.config.CLIENT_SECRET,
             base_url=self.config.BASE_URL)
-        if self.detect_api.authenticated():
-            self.log.debug("CrowdStrike Detection API connected successfully!")
+        if self.alerts_api.authenticated():
+            self.log.debug("CrowdStrike Alerts API connected successfully!")
         else:
             self.log.error(
-                f"CrowdStrike Detection API could not connect! Check secrets and permissions!")
-            raise Exception("CrowdStrike Detection API could not connect! Check secrets and permissions!")
+                f"CrowdStrike Alerts API could not connect! Check secrets and permissions!")
+            raise Exception("CrowdStrike Alerts API could not connect! Check secrets and permissions!")
 
         self.quarantine_api = Quarantine(
             client_id=self.config.CLIENT_ID, 
@@ -101,16 +97,6 @@ class CrowdStrike:
                 f"CrowdStrike Quarantine API could not connect. Check secrets and permissions!")
             raise Exception("CrowdStrike Quarantine API could not connect. Check secrets and permissions!")
 
-        self.host_api = Hosts(client_id=self.config.CLIENT_ID,
-                              client_secret=self.config.CLIENT_SECRET, 
-                              base_url=self.config.BASE_URL)
-        if self.host_api.authenticated():
-            self.log.debug("CrowdStrike Host API connected successfully!")
-        else:
-            self.log.error(
-                f"CrowdStrike Host API could not connect. Check secrets and permissions!")
-            raise Exception("CrowdStrike Host API could not connect. Check secrets and permissions!")
-        
         self.sample_api = SampleUploads(client_id=self.config.CLIENT_ID, 
                                         client_secret=self.config.CLIENT_SECRET, 
                                         base_url=self.config.BASE_URL)
@@ -122,17 +108,6 @@ class CrowdStrike:
                 f"CrowdStrike SampleUpload API could not connect. Check secrets and permissions!")
             raise Exception("CrowdStrike SampleUpload API could not connect. Check secrets and permissions!")
         
-        self.ods_api = ODS(client_id=self.config.CLIENT_ID, 
-                           client_secret=self.config.CLIENT_SECRET, 
-                           base_url=self.config.BASE_URL)
-        if self.ods_api.authenticated():
-            self.log.debug(
-                "CrowdStrike ODS API connected successfully!")
-        else:
-            self.log.error(
-                f"CrowdStrike ODS API could not connect. Check secrets and permissions!")
-            raise Exception("CrowdStrike ODS API could not connect. Check secrets and permissions!")
-        
         self.ioc_api = IOC(client_id=self.config.CLIENT_ID, 
                            client_secret=self.config.CLIENT_SECRET,
                            base_url=self.config.BASE_URL)
@@ -143,25 +118,26 @@ class CrowdStrike:
             self.log.error(
                 f"CrowdStrike IOC API could not connect. Check secrets and permissions!")
             raise Exception("CrowdStrike IOC API could not connect. Check secrets and permissions!")
-        
-        self.message_center_api = MessageCenter(client_id=self.config.CLIENT_ID, 
-                                                client_secret=self.config.CLIENT_SECRET, 
-                                                base_url=self.config.BASE_URL)
-        if self.message_center_api.authenticated():
-            self.log.info(
-                "CrowdStrike Message Center API connected successfully!")
-        else:
-            self.log.error(
-                f"CrowdStrike Message Center API could not connect. Check secrets and permissions!")
-            raise Exception("CrowdStrike Message Center API could not connect. Check secrets and permissions!")
+
+    @staticmethod
+    def _extract_error_msg(response: dict) -> str:
+        """Safely extract a human-readable error message from a FalconPy response dict."""
+        body = response.get('body', {}) if isinstance(response, dict) else {}
+        errors = body.get('errors') or []
+        if errors:
+            return errors[0].get('message', str(errors[0]))
+        message = body.get('message')
+        if message:
+            return message
+        return str(response)
 
     def get_quarantines(self) -> list[ConnectorQuarantine]:
         """
-          Gets quarantines object from CrowdStrike and create ConnectorQuarantine object for furture usage.
+          Gets quarantines object from CrowdStrike and create ConnectorQuarantine object for future usage.
 
         Raises:
-            Exception: CrowdStrike Cloud SDK exceptions while getting quarantines ids
-            Exception: CrowdStike Cloud SDK exceptions while getting quarantines object with in given time span
+            Exception: CrowdStrike Cloud SDK exceptions while getting quarantine ids
+            Exception: CrowdStrike Cloud SDK exceptions while getting quarantines object within given time span
 
         Returns:
             list[ConnectorQuarantine]: List of ConnectorQuarantine objects
@@ -170,35 +146,53 @@ class CrowdStrike:
         quarantines = []
         start_time = (datetime.now(
         ) - timedelta(seconds=self.config.TIME_SPAN)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        quarantines_response = self.quarantine_api.query_quarantine_files(
-            filter=f"date_created:>'{start_time}'")
-        if len(quarantines_response['body']['errors']) > 0:
-            self.log.error(
-                f"Error while getting quarantine ids information: Error : {quarantines_response['errors'][0]['message']}")
-            raise Exception(
-                message=f"Error occured while getting quarantine ids. Error : {quarantines_response['errors'][0]['message']}")
 
-        quarantines_ids = quarantines_response['body']['resources']
+        # Paginate through all quarantine IDs
+        offset = 0
+        limit = 5000
+        while True:
+            quarantines_response = self.quarantine_api.query_quarantine_files(
+                filter=f"date_created:>'{start_time}'",
+                limit=limit,
+                offset=offset)
+            if quarantines_response['body'].get('errors'):
+                err_msg = self._extract_error_msg(quarantines_response)
+                self.log.error(f"Error while getting quarantine ids information: {err_msg}")
+                raise Exception(f"Error occurred while getting quarantine ids. Error: {err_msg}")
+
+            page_ids = quarantines_response['body'].get('resources') or []
+            quarantines_ids.extend(page_ids)
+
+            total = (quarantines_response['body'].get('meta') or {}).get('pagination', {}).get('total', 0)
+            offset += len(page_ids)
+            if not page_ids or offset >= total:
+                break
+
         if len(quarantines_ids) == 0:
             self.log.info(
                 f"No quarantine files in the last {self.config.TIME_SPAN} seconds!")
             return []
-        quarantines_response = self.quarantine_api.get_quarantine_files(
-            ids=quarantines_ids)
-        if len(quarantines_response['body']['errors']) > 0:
-            self.log.error(
-                f"Error while getting quarantine file information: Error : {quarantines_response['errors'][0]['message']}")
-            raise Exception(
-                message=f"Error occured while getting quarantine informations. Error : {quarantines_response['errors'][0]['message']}")
 
-        for quarantine in quarantines_response['body']['resources']:
-            quarantines.append(ConnectorQuarantine(quarantine_id=quarantine['id'],
-                                                   timestamp=datetime.strptime(
-                                                       quarantine['date_created'], '%Y-%m-%dT%H:%M:%SZ'),
-                                                   sha256_hash=quarantine['sha256'],
-                                                   hostname=quarantine['hostname'],
-                                                   filename=quarantine['paths'][0]['filename'],
-                                                   quarantine_host_id=quarantine['aid']))
+        # Bulk-fetch quarantine details in batches of 100 (CrowdStrike /entities/ limit)
+        batch_size = 100
+        for i in range(0, len(quarantines_ids), batch_size):
+            batch = quarantines_ids[i:i + batch_size]
+            quarantines_response = self.quarantine_api.get_quarantine_files(ids=batch)
+            if quarantines_response['body'].get('errors'):
+                err_msg = self._extract_error_msg(quarantines_response)
+                self.log.error(f"Error while getting quarantine file information: {err_msg}")
+                raise Exception(f"Error occurred while getting quarantine information. Error: {err_msg}")
+
+            for quarantine in (quarantines_response['body'].get('resources') or []):
+                paths = quarantine.get('paths') or []
+                filename = paths[0]['filename'] if paths else ''
+                quarantines.append(ConnectorQuarantine(quarantine_id=quarantine['id'],
+                                                       timestamp=datetime.strptime(
+                                                           quarantine['date_created'], '%Y-%m-%dT%H:%M:%SZ'),
+                                                       sha256_hash=quarantine['sha256'],
+                                                       hostname=quarantine['hostname'],
+                                                       filename=filename,
+                                                       quarantine_host_id=quarantine['aid']))
 
         return quarantines
 
@@ -216,54 +210,63 @@ class CrowdStrike:
             hash_list.append(quarantine.sha256_hash)
         return hash_list
 
-    def get_detects(self) -> list[ConnectorDetect]:
-        """_summary_
+    def get_alerts(self) -> list[ConnectorDetect]:
+        """Retrieve alerts from CrowdStrike using the combined alerts endpoint (POST /alerts/combined/alerts/v1).
+        Uses cursor-based pagination to handle result sets larger than 1000.
 
         Raises:
-            Exception: Query API Error while getting detect ids
-            Exception: API Error while getting detect objects
+            Exception: API error while retrieving alerts
         Returns:
-            list[ConnectorDetect]: list OF ConnectorDetect objects
+            list[ConnectorDetect]: list of ConnectorDetect objects populated from alert data
         """
-        detects_ids = []
-        detects = []
+        alerts = []
         start_time = (datetime.now(
         ) - timedelta(seconds=self.config.TIME_SPAN)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        detect_response = self.detect_api.query_detects(
-            filter=f"created_timestamp:>'{start_time}'")
-        if len(detect_response['body']['errors']) > 0:
-            self.log.error(
-                f"Error while getting detect ids information: Error : {detect_response['errors'][0]['message']}")
-            raise Exception(
-                message=f"Error occured while getting detect ids. Error : {detect_response['errors'][0]['message']}")
+        fql_filter = f"created_timestamp:>'{start_time}'+product:'epp'"
+        after = None
 
-        detects_ids = detect_response['body']["resources"]
-        if len(detects_ids) == 0:
-            self.log.info(
-                f"No detection files in the last {self.config.TIME_SPAN} seconds!")
-            return []
-        detect_response = self.detect_api.get_detect_summaries(ids=detects_ids)
-        if len(detect_response['body']['errors']) > 0:
-            self.log.error(
-                f"Error while getting detect file information: Error : {detect_response['errors'][0]['message']}")
-            raise Exception(
-                message=f"Error occured while getting detect informations. Error : {detect_response['errors'][0]['message']}")
+        while True:
+            params = {"filter": fql_filter, "limit": 1000}
+            if after:
+                params["after"] = after
 
-        for detect in detect_response['body']['resources']:
-            detects.append(ConnectorDetect(detect_id=detect['detection_id'],
-                                            timestamp=detect['created_timestamp'],
-                                            host_id=detect['device']['device_id'],
-                                            included_sha256=detect['behaviors'][0]['sha256'],
-                                            file_path=detect['behaviors'][0]['filepath'],
-                                            os_version=detect['device']['os_version'],
-                                            device_id=detect['device']['device_id']))
-        return detects
+            response = self.alerts_api.get_alerts_combined(**params)
 
-    def extract_hashes_from_detects(self, detects: list[ConnectorDetect]) -> list[str]:
-        """extract hashes from detects
+            if response['body'].get('errors'):
+                err_msg = self._extract_error_msg(response)
+                self.log.error(f"Error while retrieving alerts: {err_msg}")
+                raise Exception(f"Error occurred while retrieving alerts: {err_msg}")
+
+            resources = response['body'].get('resources') or []
+
+            for alert in resources:
+                sha256 = alert.get('sha256', '')
+                if not sha256:
+                    continue
+                alerts.append(ConnectorDetect(
+                    composite_id=alert['composite_id'],
+                    timestamp=alert.get('created_timestamp', ''),
+                    host_id=alert.get('device', {}).get('device_id', ''),
+                    included_sha256=sha256,
+                    file_path=alert.get('filepath', ''),
+                    os_version=alert.get('device', {}).get('os_version', ''),
+                    device_id=alert.get('device', {}).get('device_id', '')
+                ))
+
+            after = (response['body'].get('meta') or {}).get('pagination', {}).get('after')
+            if not after or not resources:
+                break
+
+        if len(alerts) == 0:
+            self.log.info(f"No alerts in the last {self.config.TIME_SPAN} seconds!")
+
+        return alerts
+
+    def extract_hashes_from_alerts(self, detects: list[ConnectorDetect]) -> list[str]:
+        """extract hashes from alerts
 
         Args:
-            detects (list[ConnectorDetect]): list of ConnectorDetect objects with filled with CriwdStrike Detect API
+            detects (list[ConnectorDetect]): list of ConnectorDetect objects populated from CrowdStrike Alerts API
 
         Returns:
             list[str]: hash list of included files in detects
@@ -273,39 +276,9 @@ class CrowdStrike:
             hash_list.append(detect.included_sha256)
         return hash_list
 
-    def find_detect_id_from_quarantine(self, quarantine_id: str) -> list[str]:
-        """if there is a detect id in quarantine, this function returns it.
-
-        Args:
-            quarantine_id (str): quaranitne id
-
-        Raises:
-            Exception: no quarantine with given id
-            Exception: no detect id in quarantine
-
-        Returns:
-            list[str]: list of detect ids
-        """
-        quarantine_response = self.quarantine_api.GetQuarantineFiles(
-            ids=quarantine_id)
-        if len(quarantine_response["body"]["errors"]) > 0:
-            self.log.error(
-                f"Error while getting detect ids information: Error : {quarantine_response['errors'][0]['message']}")
-            raise Exception(
-                message=f"Error occured while getting detect ids. Error : {quarantine_response['errors'][0]['message']}")
-        if len(quarantine_response["body"]["resources"]) == 0:
-            self.log.info(f"There is no quarantine with given quarantine id!")
-            raise Exception(
-                message=f"There is no quarantine with given quarantine id!")
-        if len(quarantine_response["body"]["resources"]["detect_ids"]) == 0:
-            self.log.info(
-                f"There is no detect object with given quarantine id!")
-            return []
-        return quarantine_response["body"]["resources"]["detects_ids"]
-
     def download_malware_sample(self, sample: Sample) -> None:
         """
-          Download files from CrowdStrike found on Detectins and Quarantines services and update relevant sample object
+          Download files from CrowdStrike found on Alerts and Quarantines services and update relevant sample object
         Args:
             sample: Sample Object
         """
@@ -315,11 +288,15 @@ class CrowdStrike:
             pathlib.Path(sample.sample_sha256 + '.zip')
         unzipped_file_path = self.config.DOWNLOAD_DIR_PATH
         try:
+            self.log.debug(f"Downloading sample {sample.sample_sha256}")
             response = self.sample_api.get_sample(
                 password_protected=True, ids=sample.sample_sha256)
-            if type(response) == dict:
+            if isinstance(response, dict):
+                errors = response['body'].get('errors')
+                if errors:
+                    error_msg = self._extract_error_msg(response)
                 self.log.error(
-                    f"File cannot be downloaded! Error : {response['errors'][0]['message']}")
+                    f"File cannot be downloaded! Error: {error_msg}")
                 sample.downloaded_successfully = False
                 return
         except Exception as err:
@@ -328,8 +305,9 @@ class CrowdStrike:
             sample.downloaded_successfully = False
             return
         try:
-            open(zipped_file_path, 'wb').write(response)
-            sample.zipped_path = zipped_file_path
+            with open(zipped_file_path, 'wb') as fh:
+                fh.write(response)
+            sample.zipped_path = str(zipped_file_path)
         except Exception as err:
             self.log.error(
                 f"file with {sample.sample_sha256} hash cannot be written into a file. Error: {err}")
@@ -345,6 +323,7 @@ class CrowdStrike:
             sample.unzipped_path = self.config.DOWNLOAD_DIR_PATH / pathlib.Path(sample.sample_sha256)
             if not self._check_file_integrity(sample=sample):
                 sample.downloaded_successfully = False
+                return
         except Exception as err:
             self.log.error(
                 f"cannot check integrity {sample.sample_sha256} hashed file Error: {err}")
@@ -361,49 +340,14 @@ class CrowdStrike:
             bool: if integrity is ok return True else False
         """
         calculated_sha256_hash = hashlib.sha256()
-        with open(sample.zipped_path, "rb") as file:
+        with open(sample.unzipped_path, "rb") as file:
             for byte_block in iter(lambda: file.read(4096), b""):
                 calculated_sha256_hash.update(byte_block)
-            if calculated_sha256_hash == sample.sample_sha256:
-                return True
+        if calculated_sha256_hash.hexdigest() == sample.sample_sha256:
+            return True
 
         return False
     
-    def start_on_demand_scan(self, host_os: str, host_id: str, filepath:str) -> None:
-        """Start on demand scan on given host if host os is windows
-
-        Args:
-            host_id (str): host id for scan
-            filepath (str): malicious file path
-        """
-        try:
-            if 'windows' in host_os.lower():
-                response = self.ods_api.create_scan(host_id=host_id, file_paths=filepath, cpu_priority=1)
-            if len(response["body"]["errors"]) > 0:
-                self.log.error(f"Host {host_id} cannot start on demand scan Error : {response['errors'][0]['message']}")
-                return    
-            self.log.info(f"On Demand Scan has been started on host {host_id}")
-        except:
-            self.log.error(f"Cannot start on demand scan on host {host_id}")
-        return
-    
-    def contain_host(self, host_id: str):
-        """contain host
-
-        Args:
-            host_id (str): found host_id in quarantine or detect
-        """
-        try:
-            response = self.host_api.perform_action(ids=host_id, action_name='contain', note='Containment triggered by VMRAY Connector!')
-            if len(response["body"]["errors"]) > 0:
-                self.log.error(f"Host {host_id} cannot be contained Error : {response['errors'][0]['message']}")
-                return
-            self.log.info(f"Host {host_id} has been contained")
-        except:
-            self.log.error(f"Cannot contain host {host_id}")
-        return
-   
-        
     def check_ioc(self, type: str, value: str) -> bool:
         """Check ioc exist or not
         
@@ -415,11 +359,13 @@ class CrowdStrike:
         """
         try:
             response = self.ioc_api.indicator_search(filter=f"type:'{type}'+value:'{value}'")
-            print(response)
-            if len(response["body"]["resources"]) == 0:
+            if response['body'].get('errors'):
+                self.log.error(f"API error checking IOC {type}:{value}: {self._extract_error_msg(response)}")
                 return False
-        except:
-            self.log.error(f"Cannot check ioc {type}:{value}")
+            if not response["body"].get("resources"):
+                return False
+        except Exception as err:
+            self.log.error(f"Cannot check ioc {type}:{value}: {err}")
             return False
         return True
     
@@ -440,94 +386,54 @@ class CrowdStrike:
                                                          platforms=['mac','windows','linux'],
                                                          tags=['VMRAY'],
                                                          description=f'IOC for {sample.sample_sha256} found by VMRAY')
-                if len(response['body']['errors']) > 0:
-                    self.log.error(f"Cannot create ioc {sample.sample_sha256} because of {response['body']['errors']}")
-            
+                if response['body'].get('errors'):
+                    self.log.error(f"Cannot create ioc {sample.sample_sha256}: {self._extract_error_msg(response)}")
+
             # create iocs with ipv4 found in vmray result
-            for ip in sample.vmray_result['ipv4']:
+            for ip in sample.vmray_result.get('ipv4', set()):
                 if not self.check_ioc(type="ipv4", value=ip):
-                    response = self.ioc_api.indicator_create(action='detect', 
-                                                             type='ipv4', 
+                    response = self.ioc_api.indicator_create(action='detect',
+                                                             type='ipv4',
                                                              value=ip,
                                                              applied_globally=True,
                                                              platforms=['mac','windows','linux'],
                                                              severity='high',
                                                              tags=['VMRAY'],
                                                              description=f'IOC for {sample.sample_sha256} found by VMRAY')
-                    if len(response['body']['errors']) > 0:
-                        self.log.error(f"Cannot create ioc {ip} because of {response['body']['errors']}")
-                 
-            # create iocs with sha256 found in vmray result       
-            for found_sha256 in sample.vmray_result['sha256']:
+                    if response['body'].get('errors'):
+                        self.log.error(f"Cannot create ioc {ip}: {self._extract_error_msg(response)}")
+
+            # create iocs with sha256 found in vmray result
+            for found_sha256 in sample.vmray_result.get('sha256', set()):
                 if not self.check_ioc(type="sha256", value=found_sha256):
                     response = self.ioc_api.indicator_create(action='prevent',
-                                                             type='sha256', 
-                                                             value=found_sha256, 
+                                                             type='sha256',
+                                                             value=found_sha256,
                                                              applied_globally=True,
                                                              severity='high',
                                                              platforms=['mac','windows','linux'],
                                                              tags=['VMRAY'],
                                                              description=f'IOC for {found_sha256} found by VMRAY')
-                    if len(response['body']['errors']) > 0:
-                        self.log.error(f"Cannot create ioc {found_sha256} because of {response['body']['errors']}")
-                        
+                    if response['body'].get('errors'):
+                        self.log.error(f"Cannot create ioc {found_sha256}: {self._extract_error_msg(response)}")
+
             # create iocs with domain found in vmray result
-            for domain in sample.vmray_result['domain']:
+            for domain in sample.vmray_result.get('domain', set()):
                 if not self.check_ioc(type="domain", value=domain):
-                    response = self.ioc_api.indicator_create(action='detect', 
-                                                             type='domain', 
+                    response = self.ioc_api.indicator_create(action='detect',
+                                                             type='domain',
                                                              value=domain,
                                                              applied_globally=True,
                                                              platforms=['mac','windows','linux'],
                                                              severity='high',
                                                              tags=['VMRAY'],
                                                              description=f'IOC for {sample.sample_sha256} found by VMRAY')
-                    if len(response['body']['errors']) > 0:
-                        self.log.error(f"Cannot create ioc {domain} because of {response['body']['errors']}")
+                    if response['body'].get('errors'):
+                        self.log.error(f"Cannot create ioc {domain}: {self._extract_error_msg(response)}")
         except Exception as err:
             self.log.error(f"Cannot create ioc {sample.sample_sha256} because of {err}")
          
     
-    def find_ioc_devices(self, sample: Sample) -> list[str]:
-        """Find devices that ran on given sample's IOCs
-
-        Args:
-            sample (Sample): sample object
-
-        Returns:
-            list[str]: list of host ids
-        """
-        host_ids = []
-        if not self.check_ioc(type="sha256", value=sample.sample_sha256):
-            response = self.ioc_api.devices_ran_on(type='sha256', value=sample.sample_sha256)
-            if len(response['body']['errors']) > 0:
-                self.log.error(f"Cannot get host infos for ioc {sample.sample_sha256} because of {response['body']['errors']}")
-            else:
-                host_ids.extend(response['body']['resources'])
-                
-        for found_sha256 in sample.vmray_result['sha256']:
-            if not self.check_ioc(type="sha256", value=found_sha256):
-                response = self.ioc_api.devices_ran_on(policy='detect', type='sha256', value=found_sha256)
-                if len(response['body']['errors']) > 0:
-                    self.log.error(f"Cannot get host infos for ioc {found_sha256} because of {response['body']['errors']}")
-                else:
-                    host_ids.extend(response['body']['resources'])
-        return host_ids
-        
-        
-    def open_case(self, sample: Sample=None, message: str= None, title: str= None) -> None:
-        '''Open case for given sample
-        
-        ##TODO : Couldn't be tested because of lack of permissions. If any suggestion or fix please open issue
-        '''
-        try:
-            response = self.message_center_api.create_case(user_uuid=self.config.CASE_USER, title=title, message= message)
-            if len(response['body']['errors']) > 0:
-                self.log.error(f"Cannot create case! ERROR: {response['body']['errors']}")
-        except:
-            self.log.error(f"Cannot create case for {sample.sample_sha256}")
-        pass
-
     def update_quarantine(self, quarantine_id: str, comment: str, action: str) -> None:
         """Update quarantine with given id
 
@@ -538,40 +444,27 @@ class CrowdStrike:
         """
         try:
             response = self.quarantine_api.update_quarantined_detects_by_id(ids=quarantine_id, comment=comment, action=action)
-            if response["status_code"] != 200 and len(response['body']['errors']) > 0:
-                self.log.error(f"Cannot update quarantine {quarantine_id} because of {response['body']['errors']}")    
+            if response["status_code"] != 200 or response['body'].get('errors'):
+                self.log.error(f"Cannot update quarantine {quarantine_id}: {self._extract_error_msg(response)}")    
 
-        except:
-            self.log.error(f"Cannot update quarantine {quarantine_id}")
+        except Exception as err:
+            self.log.error(f"Cannot update quarantine {quarantine_id}: {err}")
 
     
-    def update_detection(self, detection_id: str, comment: str, status: str) -> None:
-        """Update detection with given id
+    def update_alert(self, composite_id: str, comment: str) -> None:
+        """Append a comment to an alert via PATCH /alerts/entities/alerts/v3.
 
         Args:
-            detection_id (str): detection id in crowdstrike
-            comment (str): comment to add to detection object
-            status (str): status to set on detection object
+            composite_id (str): composite alert ID
+            comment (str): comment to append to the alert
         """
-        show_in_ui = False
-        if status != 'false_positive':
-            show_in_ui = True
         try:
-            response = self.detect_api.update_detects_by_ids(ids=detection_id, comment=comment, status=status, show_in_ui=show_in_ui)
-            if response["status_code"] != 200 and len(response['body']['errors']) > 0:
-                self.log.error(f"Cannot update detection {detection_id} because of {response['body']['errors']}")    
-        except:
-            self.log.error(f"Cannot update detection {detection_id}")
+            response = self.alerts_api.update_alerts_v3(
+                composite_ids=[composite_id],
+                append_comment=comment
+            )
+            if response["status_code"] != 200 or response['body'].get('errors'):
+                self.log.error(f"Cannot update alert {composite_id}: {self._extract_error_msg(response)}")
+        except Exception as err:
+            self.log.error(f"Cannot update alert {composite_id}: {err}")
 
-    def export_host_from_detection(self, detection: ConnectorDetect):
-        """Export host from given detection
-        
-        Args:
-            detection (ConnectorDetect): detection object
-            
-        Returns: 
-            host_id (str): host id of given detection
-        """
-        if detection.host_id is None:
-            return None
-        return detection.host_id

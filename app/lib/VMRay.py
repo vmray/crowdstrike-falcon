@@ -34,8 +34,8 @@ class VMRay:
 
     def healthcheck(self):
         """
-        Healtcheck for VMRay REST API, uses system_info endpoint
-        :raise: When healtcheck error occured during the connection wih REST API
+        Healthcheck for VMRay REST API, uses system_info endpoint
+        :raise: When healthcheck error occurred during the connection with REST API
         :return: boolean status of VMRay REST API
         """
         self.log.debug("healthcheck function is invoked")
@@ -79,19 +79,19 @@ class VMRay:
 
         method = "GET"
         if sample_id:
-            url = f"/rest/sample/{identifier}".format(identifier)
+            url = f"/rest/sample/{identifier}"
         else:
-            url = f"/rest/sample/sha256/{identifier}".format(identifier)
+            url = f"/rest/sample/sha256/{identifier}"
         try:
             response = self.api.call(method, url)
-            if len(response) == 0:
+            if not response or (isinstance(response, list) and len(response) == 0):
                 self.log.debug(
-                    f"Sample {identifier} couldn't be found in VMRay database.".format(identifier))
+                    f"Sample {identifier} couldn't be found in VMRay database.")
                 return None
             else:
                 self.log.debug(
-                    f"Sample {identifier} retrieved from VMRay".format(identifier))
-                return response[0]
+                    f"Sample {identifier} retrieved from VMRay")
+                return response
         except Exception as err:
             self.log.debug(
                 "Sample {} couldn't be found in VMRay database. Error: {}".format(identifier, err))
@@ -113,9 +113,10 @@ class VMRay:
                 url = f"/rest/sample/{sample_id}/iocs/verdict/{key}"
                 response = self.api.call("GET", url)
 
-                iocs[key] = response
+                if response is not None:
+                    iocs[key] = response
                 self.log.debug(
-                    f"IOC reports for {sample_id} retrieved from VMRay".format(sample_id))
+                    f"IOC reports for {sample_id} retrieved from VMRay")
             except Exception as err:
                 self.log.error(err)
 
@@ -133,11 +134,11 @@ class VMRay:
             url = f"/rest/sample/{sample_id}/vtis"
             response = self.api.call("GET", url)
             self.log.debug(
-                f"VTI reports for {sample_id} retrieved from VMRay".format(sample_id))
+                f"VTI reports for {sample_id} retrieved from VMRay")
             return response
         except Exception as err:
             self.log.debug(
-                f"VTI reports for {sample_id} couldn't be retrieved from VMRay".format(sample_id))
+                f"VTI reports for {sample_id} couldn't be retrieved from VMRay")
             self.log.error(err)
             return None
 
@@ -164,11 +165,11 @@ class VMRay:
             "sample_md5hash",
             "sample_sha256hash",
             "sample_webif_url",
-            "sample_classification",
-            "sample_thread_name",
+            "sample_classifications",
+            "sample_threat_names",
         ]
         if sample_summary is not None:
-            if type(sample_summary) == type(list):
+            if isinstance(sample_summary, list):
                 sample_summary = sample_summary[0]
             for key in keys:
                 if key in sample_summary:
@@ -255,7 +256,8 @@ class VMRay:
                     if "Ransomware" not in file["classifications"]:
                         for file_hash in file["hashes"]:
                             sha256.add(file_hash["sha256_hash"])
-                        filenames.update(file["filenames"])
+                        if file["filenames"] is not None:
+                            filenames.update(file["filenames"])
 
         file_iocs["sha256"] = sha256
         file_iocs["file_name"] = filenames
@@ -299,18 +301,23 @@ class VMRay:
         for ioc_type in iocs:
             ips = iocs[ioc_type]["iocs"]["ips"]
             for ip in ips:
-                domains.update(ip["domains"])
-                ip_addresses.add(ip["ip_address"])
+                if ip["verdict"] in GeneralConfig.SELECTED_VERDICTS:
+                    domains.update(ip.get("domains") or [])
+                    ip_addresses.add(ip["ip_address"])
 
             urls = iocs[ioc_type]["iocs"]["urls"]
             for url in urls:
-                ip_addresses.update(url["ip_addresses"])
-                for original_url in url["original_urls"]:
-                    try:
-                        ipaddress.ip_address(urlparse(original_url).netloc)
-                        ip_addresses.add(urlparse(original_url).netloc)
-                    except Exception as err:
-                        domains.add(urlparse(original_url).netloc)
+                if url["verdict"] in GeneralConfig.SELECTED_VERDICTS:
+                    ip_addresses.update(url.get("ip_addresses") or [])
+                    for original_url in url["original_urls"]:
+                        netloc = urlparse(original_url).netloc
+                        if not netloc:
+                            continue
+                        try:
+                            ipaddress.ip_address(netloc)
+                            ip_addresses.add(netloc)
+                        except Exception:
+                            domains.add(netloc)
 
         network_iocs["domain"] = domains
         network_iocs["ipv4"] = ip_addresses
@@ -374,7 +381,6 @@ class VMRay:
         params["comment"] = self.config.SUBMISSION_COMMENT
         params["tags"] = ",".join(self.config.SUBMISSION_TAGS)
         params["user_config"] = json.dumps({"timeout": self.config.ANALYSIS_TIMEOUT})
-        params["analyzer_mode"] = self.config.DEFAULT_ANALYZER_MODE.value
         
         try:
             with io.open(sample.unzipped_path, "rb") as file_object:
@@ -383,12 +389,22 @@ class VMRay:
                     response = self.api.call(method, url, params=params)
                 except Exception as err:
                     self.log.error("Error while submitting sample to VMRay Sandbox: {}".format(err))
-                
+                    sample.vmray_submit_successfully = False
+                    sample.vmray_submission_id = None
+                    sample.vmray_sample_id = None
+                    return
+
                 if len(response["errors"]) > 0:
                     sample.vmray_submit_successfully = False
                     for error in response["errors"]:
                         self.log.error("VMray Error while submitting sample : {}".format(error))
-                
+                    return
+
+                if not response.get("submissions"):
+                    self.log.error("VMRay returned no submission info for sample {}".format(sample.sample_sha256))
+                    sample.vmray_submit_successfully = False
+                    return
+
                 sample.vmray_submission_id = response["submissions"][0]["submission_id"]
                 if "sample_id" in response["submissions"][0].keys():
                     sample.vmray_sample_id = response["submissions"][0]["sample_id"]
@@ -414,7 +430,7 @@ class VMRay:
         # Adding timestamp and error_count for checking status and timeouts
         submission_objects = []
         for submission in submitted_samples:
-            if submission.downloaded_successfully:
+            if submission.downloaded_successfully and submission.vmray_submit_successfully:
                 submission_objects.append({"sample": submission,
                                         "timestamp": None,
                                         "error_count": 0})
@@ -423,40 +439,41 @@ class VMRay:
 
         # Wait for all submissions to finish or exceed timeout
         while len(submission_objects) > 0:
-            time.sleep(VMRayConfig.ANALYSIS_JOB_TIMEOUT / 10)
-            for submission_object in submission_objects:
+            for submission_object in list(submission_objects):
                 try:
-                    if not self.check_submission_error(submission_object['sample'].vmray_submission_id):
-                        submission_object["error_count"] += 1
-                        self.log.error(f"Submission job {submission_object['sample'].vmray_submission_id} failed")
-                         
                     response = self.api.call(method, url.format(submission_object["sample"].vmray_submission_id))
-                    # If submission is finished, return submission info and process sample report,IOC etc
+                    # If submission is finished, check for errors then process results
                     if response["submission_finished"]:
+                        if self.check_submission_error(submission_object['sample'].vmray_submission_id):
+                            submission_object["error_count"] += 1
+                            self.log.error(f"Submission job {submission_object['sample'].vmray_submission_id} has analysis errors")
                         self.add_sample_results(submission_object['sample'])
                         submission_object['sample'].vmray_submission_finished = True
                         submission_objects.remove(submission_object)
-                        self.log.info(f"Submission job {submission_object['sample'].vmray_submission_id} finished" )
+                        self.log.info(f"Submission job {submission_object['sample'].vmray_submission_id} finished")
 
                     # If submission is not finished and timer is not set, start timer to check timeout
                     elif submission_object["timestamp"] is None:
                         if self.is_submission_started(submission_object["sample"].vmray_submission_id):
                             submission_object["timestamp"] = datetime.now()
 
-                    # If timer is set, check configured timeout and return status as not finished
-                    elif (datetime.now() - submission_object["timestamp"]).seconds >= VMRayConfig.ANALYSIS_JOB_TIMEOUT:
+                    # If timer is set, check configured timeout and mark as not finished
+                    elif (datetime.now() - submission_object["timestamp"]).total_seconds() >= VMRayConfig.ANALYSIS_JOB_TIMEOUT:
                         self.log.error(f"Submission job {submission_object['sample'].vmray_submission_id} exceeded the configured time threshold.")
                         submission_object['sample'].vmray_submission_finished = False
                         submission_objects.remove(submission_object)
-                        continue
 
                 except Exception as err:
-                    # If 5 errors are occured, return status as not finished else try again
+                    # If 5 errors occurred, give up on this submission
                     if submission_object["error_count"] >= 5:
                         submission_object['sample'].vmray_submission_finished = False
+                        submission_objects.remove(submission_object)
                     else:
                         submission_object["error_count"] += 1
                     self.log.error(str(err))
+
+            if len(submission_objects) > 0:
+                time.sleep(VMRayConfig.ANALYSIS_JOB_TIMEOUT / 10)
 
         self.log.info("Submission jobs finished")
 
@@ -488,11 +505,24 @@ class VMRay:
         sample_summary = self.get_sample_summary(sample.sample_sha256)
         if sample_summary is None:
             return
+        # sha256 endpoint returns a list; normalize to a single dict
+        if isinstance(sample_summary, list):
+            if len(sample_summary) == 0:
+                return
+            sample_summary = sample_summary[0]
         sample_metadata = self.parse_sample_summary_data(sample_summary)
-        sample.vmray_metadata = sample_metadata    
-        sample_ioc = self.get_sample_iocs(sample_summary)
+        sample.vmray_metadata = sample_metadata
+        sample_ioc = self.get_sample_iocs(sample_metadata)
         parsed_sample_ioc = self.parse_sample_iocs(sample_ioc)
         sample.vmray_result = parsed_sample_ioc
+
+        verdict_str = sample_metadata.get('sample_verdict', '')
+        if verdict_str == VERDICT.MALICIOUS.value:
+            sample.vmray_verdict = VERDICT.MALICIOUS
+        elif verdict_str == VERDICT.SUSPICIOUS.value:
+            sample.vmray_verdict = VERDICT.SUSPICIOUS
+        else:
+            sample.vmray_verdict = VERDICT.CLEAN
     
     def get_submission_analyses(self, submission_id):
         """
@@ -512,20 +542,19 @@ class VMRay:
             self.log.debug(f"Submission {submission_id} analyses couldn't retrieved from VMRay. Error: {err}")
             return None   
     
-    def check_submission_error(self, submission):
+    def check_submission_error(self, submission) -> bool:
         """
-        Check and log any analysis error in finished submissions
-        :param submissions: list of submission_id's
-        :return: void
+        Check for analysis errors in a finished submission.
+        :param submission: submission_id to check
+        :return: True if errors were found, False if analysis completed cleanly
         """
         self.log.debug("check_submission_error function is invoked")
         analyses = self.get_submission_analyses(submission)
-        if analyses is not None:
-            for analysis in analyses:
-                if analysis["analysis_severity"] == "error":
-                    self.log.error(f"Analysis {analysis['analysis_id']} for submission {submission['submission_id']} has error: {analysis['analysis_result_str']}")
-                    return False
-        else:
-            self.log.error(f"Submission {submission['submission_id']} analyses couldn't retrieved from VMRay return is None")            
-            return False
-        return True
+        if analyses is None:
+            self.log.error(f"Submission {submission} analyses couldn't be retrieved from VMRay")
+            return True
+        for analysis in analyses:
+            if analysis["analysis_severity"] == "error":
+                self.log.error(f"Analysis {analysis['analysis_id']} for submission {submission} has error: {analysis['analysis_result_str']}")
+                return True
+        return False
