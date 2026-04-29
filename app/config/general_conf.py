@@ -1,6 +1,9 @@
 import pathlib
 import logging as log
 from enum import Enum
+from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(find_dotenv())
 
 # VMRay verdicts
 
@@ -18,8 +21,8 @@ class RUNTIME_MODE(Enum):
 
 # General Configuration
 class GeneralConfig:
-    # Log directory
-    LOG_DIR = pathlib.Path("log")
+    # Log directory (relative to app/, regardless of CWD)
+    LOG_DIR = pathlib.Path(__file__).parent.parent / "log"
 
     # Log file path
     LOG_FILE_PATH = LOG_DIR / pathlib.Path("cs-connector.log")
@@ -37,6 +40,3 @@ class GeneralConfig:
     # If selected as CLI, script works only once, you need to create cron job for continuos processing
     # If selected as DOCKER, scripts works continuously with TIME_SPAN above
     RUNTIME_MODE = RUNTIME_MODE.DOCKER
-    
-    # Open case if sample cannot be submitted to VMRay or downloaded from CrowdStrike
-    SUBMIT_OR_DOWNLOAD_ERROR_OPEN_CASE = False
