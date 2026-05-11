@@ -13,7 +13,11 @@ All connector activity is written to `app/log/cs-connector.log`. Each line follo
 To tail live output:
 
 ```bash
+# Linux / macOS
 tail -f app/log/cs-connector.log
+
+# Windows (PowerShell)
+Get-Content -Wait app/log/cs-connector.log
 ```
 
 For Docker:
@@ -60,7 +64,7 @@ ERROR VMRay health check failed: ...
 |---|---|
 | `VMRAY_API_KEY` is blank or wrong | Check `.env`. |
 | Wrong `VMRAY_BASE_URL` | Confirm the URL points to your VMRay instance. Cloud default: `https://eu.cloud.vmray.com`. |
-| TLS certificate error (self-signed cert) | Set `SSL_VERIFY = False` in `vmray_conf.py` **only** for internal/lab environments. |
+| TLS certificate error (self-signed cert) | `SSL_VERIFY` defaults to `False` — certificate verification is disabled by default. Set `SSL_VERIFY = True` in `vmray_conf.py` to enforce verification in production environments. |
 | Firewall or proxy blocking outbound HTTPS | Ensure the host can reach the VMRay endpoint on port 443. |
 
 ---
@@ -213,8 +217,12 @@ The connector writes logs to `/app/log/cs-connector.log` inside the container.
 The `docker-entrypoint.sh` script creates these directories and assigns them to the `connector` user. If you mount an external volume with root ownership, the non-root `connector` user cannot write to it. Fix by pre-creating the directory with world-writable permissions or setting appropriate ownership:
 
 ```bash
+# Linux / macOS
 mkdir -p app/log
 chmod 777 app/log
+
+# Windows (PowerShell)
+New-Item -ItemType Directory -Force app/log
 ```
 
 ---

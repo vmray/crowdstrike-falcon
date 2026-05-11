@@ -59,7 +59,11 @@ pip install -r app/requirements.txt
 ### Set up credentials
 
 ```bash
+# Linux / macOS
 cp .env.example .env
+
+# Windows (CMD)
+copy .env.example .env
 ```
 
 Edit `.env`:
@@ -104,7 +108,7 @@ To poll only alerts (no quarantines), change `SELECTED_DATA_SOURCES` to `[DATA_S
 ```python
 class VMRayConfig:
     API_KEY_TYPE = "report"         # "report" or "verdict"
-    SSL_VERIFY = True               # Set False only for self-signed certs
+    SSL_VERIFY = False              # Set True to enforce TLS certificate verification
     ANALYSIS_TIMEOUT = 120          # Sandbox analysis timeout (seconds)
     ANALYSIS_JOB_TIMEOUT = 3600      # Max wait for VMRay to finish (seconds)
     POLL_INTERVAL = ANALYSIS_JOB_TIMEOUT // 100  # Polling interval (seconds)
@@ -140,11 +144,25 @@ Set `RUNTIME_MODE = RUNTIME_MODE.DOCKER` in `general_conf.py`, then:
 
 ```bash
 docker build -t cs_connector .
+```
+
+```bash
+# Linux / macOS
 docker run -d \
   -v $(pwd)/app/log:/app/log \
   --env-file .env \
   --name cs_connector \
   cs_connector
+
+# Windows (PowerShell)
+docker run -d `
+  -v ${PWD}/app/log:/app/log `
+  --env-file .env `
+  --name cs_connector `
+  cs_connector
+
+# Windows (CMD)
+docker run -d -v %cd%/app/log:/app/log --env-file .env --name cs_connector cs_connector
 ```
 
 In Docker mode the connector loops indefinitely, sleeping `TIME_SPAN` seconds between runs. The container:
@@ -165,7 +183,11 @@ docker logs -f cs_connector
 After the first run, check the log file:
 
 ```bash
+# Linux / macOS
 tail -f app/log/cs-connector.log
+
+# Windows (PowerShell)
+Get-Content -Wait app/log/cs-connector.log
 ```
 
 A successful run produces lines similar to:

@@ -122,7 +122,9 @@ class CrowdStrike:
         self.alerts_api = Alerts(
             client_id=self.config.CLIENT_ID,
             client_secret=self.config.CLIENT_SECRET,
-            base_url=self.config.BASE_URL)
+            base_url=self.config.BASE_URL,
+            ssl_verify=False
+        )
         if self.alerts_api.authenticated():
             logger.info("CrowdStrike Alerts API authenticated")
         else:
@@ -132,7 +134,9 @@ class CrowdStrike:
         self.quarantine_api = Quarantine(
             client_id=self.config.CLIENT_ID,
             client_secret=self.config.CLIENT_SECRET,
-            base_url=self.config.BASE_URL)
+            base_url=self.config.BASE_URL,
+            ssl_verify=False
+        )
         if self.quarantine_api.authenticated():
             logger.info("CrowdStrike Quarantine API authenticated")
         else:
@@ -142,7 +146,9 @@ class CrowdStrike:
         self.sample_api = SampleUploads(
             client_id=self.config.CLIENT_ID,
             client_secret=self.config.CLIENT_SECRET,
-            base_url=self.config.BASE_URL)
+            base_url=self.config.BASE_URL,
+            ssl_verify=False
+        )
         if self.sample_api.authenticated():
             logger.info("CrowdStrike SampleUploads API authenticated")
         else:
@@ -152,7 +158,9 @@ class CrowdStrike:
         self.ioc_api = IOC(
             client_id=self.config.CLIENT_ID,
             client_secret=self.config.CLIENT_SECRET,
-            base_url=self.config.BASE_URL)
+            base_url=self.config.BASE_URL,
+            ssl_verify=False
+        )
         if self.ioc_api.authenticated():
             logger.info("CrowdStrike IOC API authenticated")
         else:

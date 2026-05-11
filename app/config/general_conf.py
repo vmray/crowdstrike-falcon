@@ -43,5 +43,5 @@ class GeneralConfig:
     LOG_FILE_PATH = LOG_DIR / pathlib.Path("cs-connector.log")
     LOG_LEVEL = log.INFO
     SELECTED_VERDICTS = [VERDICT.MALICIOUS.value]
-    TIME_SPAN = 1110800
+    TIME_SPAN = 10800
     RUNTIME_MODE = RUNTIME_MODE.DOCKER
