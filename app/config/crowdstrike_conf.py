@@ -1,72 +1,53 @@
-from enum import Enum
-import pathlib
-from token import COMMENT
-from config.general_conf import GeneralConfig, VERDICT
+"""CrowdStrike API configuration: credentials, endpoints, data sources, and action flags."""
 
-# CrowdStrike DataSource
+from enum import Enum
+import os
+import pathlib
+from config.general_conf import GeneralConfig
+from config.constants import CS_BASE_URL
 
 
 class DATA_SOURCE(Enum):
+    """CrowdStrike data sources polled by the connector."""
+
     QUARANTINE = "Quarantine"
-    DETECT = "Detect"
-
-class CrowdStrikeConfig():
-    # CrowdStrike Client ID
-    CLIENT_ID = "<CrowdStrike-Client-ID>"
+    ALERT = "Alert"
 
 
-    # CrowdStrike Client Secret
-    CLIENT_SECRET = "<CrowdStrike-Client-Secret>"
+class CrowdStrikeConfig:
+    """CrowdStrike API settings and connector action flags.
 
+    Credentials and the base URL are loaded from environment variables so that
+    sensitive values are never stored in source code.
 
-    # CrowdStrike API Base URL #Default : https://api.us-2.crowdstrike.com
-    BASE_URL = 'https://api.us-2.crowdstrike.com'
-
-    # Download directory name
-    DOWNLOAD_DIR = pathlib.Path("downloads")
-
-    # Download directory path
-    DOWNLOAD_DIR_PATH = pathlib.Path(
-        __file__).parent.parent.resolve() / DOWNLOAD_DIR
-
-    SELECTED_DATA_SOURCES = [DATA_SOURCE.DETECT, DATA_SOURCE.QUARANTINE]
-
-    TIME_SPAN = GeneralConfig.TIME_SPAN + 600
+    Attributes:
+        CLIENT_ID (str): CrowdStrike OAuth2 client ID
+            (env: ``CROWDSTRIKE_CLIENT_ID``).
+        CLIENT_SECRET (str): CrowdStrike OAuth2 client secret
+            (env: ``CROWDSTRIKE_CLIENT_SECRET``).
+        BASE_URL (str): CrowdStrike API base URL
+            (env: ``CROWDSTRIKE_BASE_URL``, default us-2 region).
+        DOWNLOAD_DIR (pathlib.Path): Relative name of the sample download
+            directory.
+        DOWNLOAD_DIR_PATH (pathlib.Path): Absolute path to the sample download
+            directory, resolved relative to the ``app/`` package root.
+        SELECTED_DATA_SOURCES (list[DATA_SOURCE]): Data sources to poll for
+            new evidence hashes.
+        TIME_SPAN (int): Look-back window in seconds passed to CrowdStrike
+            queries. Adds a 600 s buffer on top of ``GeneralConfig.TIME_SPAN``
+            to account for clock skew.
+        COMMENT_TO_DETECTION (bool): When ``True``, post VMRay analysis comments
+            to matched CrowdStrike detections.
+        COMMENT_TO_QUARANTINE (bool): When ``True``, post VMRay analysis comments
+            and update the disposition of matched quarantine items.
     """
-		###Action Configs
-	"""
-    # User uuid that connector can open case
-    USER_UUID = '<EXAMPLE_USER_UUID>' 
-    
-    # Comment to detection
-    COMMMENT_TO_DETECTION = True
-    
-    # Comment to Quarantine
-    COMMENT_TO_QUARANTINE = True
-    
-    # Contain host machine if a detection or quarantine file affect it
-    CONTAIN_HOST = False
 
-    # Contain host level from VMRay verdict
-    CONTAIN_HOST_LEVELS = [VERDICT.SUSPICIOUS, VERDICT.MALICIOUS]
-    
-    # Create a Case if a detection or quarantine files when VMRay verdict hits one of CREATE_CASE_LEVELS
-    CREATE_CASE = False
-    
-    # Case Creation level list from VMRay verdict
-    CREATE_CASE_LEVELS = [VERDICT.SUSPICIOUS, VERDICT.MALICIOUS]
-    
-    # User uuid that connector can open case RECOMMENDED: Create a user for connector and follow the cases
-    CASE_USERS = '<EXAMPLE_USER_UUID>'
-    
-    # Find another host with same IOC
-    FIND_ANOTHER_HOST = False 
-    
-    # Find another host event level list from VMRay verdict
-    FIND_ANOTHER_HOST_LEVELS = [VERDICT.SUSPICIOUS, VERDICT.MALICIOUS]
-    
-    # Add Threat classification to detection object as comment
-    ADD_THREAT_CLASSIFICATION = True
-    
-    # Add threat name to detection object as comment
-    ADD_THREAT_NAME = True
+    CLIENT_ID = os.environ.get("CROWDSTRIKE_CLIENT_ID", "")
+    CLIENT_SECRET = os.environ.get("CROWDSTRIKE_CLIENT_SECRET", "")
+    BASE_URL = os.environ.get("CROWDSTRIKE_BASE_URL") or CS_BASE_URL
+    DOWNLOAD_DIR = pathlib.Path("downloads")
+    DOWNLOAD_DIR_PATH = pathlib.Path(__file__).parent.parent.resolve() / DOWNLOAD_DIR
+    SELECTED_DATA_SOURCES = [DATA_SOURCE.ALERT, DATA_SOURCE.QUARANTINE]
+    TIME_SPAN = GeneralConfig.TIME_SPAN + 600
+    COMMENT_TO_DETECTION = True
+    COMMENT_TO_QUARANTINE = True

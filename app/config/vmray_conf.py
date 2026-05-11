@@ -1,62 +1,51 @@
-from enum import Enum
+"""VMRay API configuration: credentials, submission settings, and polling behaviour."""
+
+import os
 from config.general_conf import VERDICT
-# VMRay API Key types enum
+from config.constants import VMRAY_BASE_URL
 
 
-class VMRAY_API_KEY_TYPE(Enum):
-    REPORT = 0
-    VERDICT = 1
-
-# VMRay analyzer modes
-class ANALYZER_MODE(Enum):
-    REPUTATION = "reputation"
-    REPUTATION_STATIC = "reputation_static"
-    REPUTATION_STATIC_DYNAMIC = "reputation_static_dynamic"
-    STATIC_DYNAMIC = "static_dynamic"
-    STATIC = "static"
-
-
-# VMRay job status
-class JOB_STATUS(Enum):
-    QUEUED = "queued"
-    INWORK = "inwork"
-
-
-# VMRay Configuration
 class VMRayConfig:
-    # VMRay API Key type setting
-    API_KEY_TYPE = VMRAY_API_KEY_TYPE.REPORT
+    """VMRay REST API settings and sample submission parameters.
 
-    # VMRay Report or Verdict API KEY
-    API_KEY = "<VMRAY_API_KEY>"
+    The API key and URL are loaded from environment variables. All other
+    values can be overridden by subclassing or modifying this class directly.
 
-    # VMRay REST API URL
-    URL = "https://eu.cloud.vmray.com"
+    Attributes:
+        API_KEY_TYPE (str): Indicates whether a ``"report"`` or ``"verdict"``
+            API key is configured.
+        API_KEY (str): VMRay REST API key (env: ``VMRAY_API_KEY``).
+        URL (str): VMRay instance base URL
+            (env: ``VMRAY_BASE_URL``, default public cloud).
+        CONNECTOR_NAME (str): User-agent string sent with VMRay API requests.
+        SSL_VERIFY (bool): Whether to verify the VMRay server's TLS certificate.
+            Set to ``False`` only for self-signed certificate environments.
+        SUBMISSION_COMMENT (str): Comment attached to every VMRay submission.
+        SUBMISSION_TAGS (list[str]): Tags attached to every VMRay submission.
+            Tags must not contain spaces.
+        ANALYSIS_TIMEOUT (int): Per-analysis sandbox timeout in seconds passed
+            via ``user_config`` at submission time.
+        ANALYSIS_JOB_TIMEOUT (int): Maximum wall-clock time in seconds the
+            connector will wait for a submitted analysis to finish before
+            marking it as timed out.
+        POLL_INTERVAL (int): Seconds to wait between polling rounds while
+            waiting for submissions to complete.
+        RESUBMIT (bool): When ``True``, samples already in the VMRay database
+            with a verdict in ``RESUBMISSION_VERDICTS`` are re-submitted for
+            fresh analysis.
+        RESUBMISSION_VERDICTS (list[VERDICT]): Verdict enum members that
+            trigger resubmission when ``RESUBMIT`` is ``True``.
+    """
 
-    # User Agent string for VMRay Api requests
-    # Defined for further use
+    API_KEY_TYPE = "report"
+    API_KEY = os.environ.get("VMRAY_API_KEY", "")
+    URL = os.environ.get("VMRAY_BASE_URL") or VMRAY_BASE_URL
     CONNECTOR_NAME = "CrowdStrikeCloudConnector"
-
-    # SSL Verification setting for self-signed certificates
     SSL_VERIFY = True
-
-    # VMRay Submission Comment
     SUBMISSION_COMMENT = "Sample from VMRay CrowdStrike Connector"
-
-    # VMRay submission tags (Can't contain space)
     SUBMISSION_TAGS = ["CrowdStrike"]
-
-    # VMRay analysis timeout value (seconds)
     ANALYSIS_TIMEOUT = 120
-
-    # VMRay analysis job timeout for wait_submissions
     ANALYSIS_JOB_TIMEOUT = 3600
-
-    # Analyzer mode for normal samples
-    DEFAULT_ANALYZER_MODE = ANALYZER_MODE.REPUTATION_STATIC_DYNAMIC
-
-    # Resubmission status which has been already analyzed by VMRay
-    RESUBMIT = True
-
-    # Selected verdicts to resubmit evidences
+    POLL_INTERVAL = ANALYSIS_JOB_TIMEOUT // 100
+    RESUBMIT = False
     RESUBMISSION_VERDICTS = [VERDICT.MALICIOUS, VERDICT.SUSPICIOUS]
