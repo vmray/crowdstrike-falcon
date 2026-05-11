@@ -1,42 +1,47 @@
+"""General connector configuration: logging, runtime mode, time window, and verdicts."""
+
 import pathlib
 import logging as log
 from enum import Enum
+from dotenv import load_dotenv, find_dotenv
 
-# VMRay verdicts
+load_dotenv(find_dotenv())
 
 
 class VERDICT(Enum):
+    """VMRay analysis verdict levels."""
+
     SUSPICIOUS = "suspicious"
     MALICIOUS = "malicious"
     CLEAN = "clean"
-    
-# Runtime mode of connector
+
+
 class RUNTIME_MODE(Enum):
+    """Execution mode for the connector process."""
+
     DOCKER = "DOCKER"
     CLI = "CLI"
 
 
-# General Configuration
 class GeneralConfig:
-    # Log directory
-    LOG_DIR = pathlib.Path("log")
+    """Top-level runtime configuration shared across all connector modules.
 
-    # Log file path
+    Attributes:
+        LOG_DIR (pathlib.Path): Directory where log files are written.
+        LOG_FILE_PATH (pathlib.Path): Full path to the connector log file.
+        LOG_LEVEL (int): Python logging level (e.g. ``logging.INFO``).
+        SELECTED_VERDICTS (list[str]): Verdict string values that the connector
+            will act on (e.g. create IOCs, post comments). Uses the string form
+            of :class:`VERDICT` members because the VMRay API returns strings.
+        TIME_SPAN (int): Look-back window in seconds used when querying
+            CrowdStrike for recent events. Default is 3 hours (10 800 s).
+        RUNTIME_MODE (RUNTIME_MODE): Controls whether the connector runs once
+            (``CLI``) or loops continuously (``DOCKER``).
+    """
+
+    LOG_DIR = pathlib.Path(__file__).parent.parent / "log"
     LOG_FILE_PATH = LOG_DIR / pathlib.Path("cs-connector.log")
-
-    # Log verbosity level
     LOG_LEVEL = log.INFO
-
-    # Selected verdicts's values (!!!Because VMray report has a string value!!!) to process and report back to CrowdStrike
     SELECTED_VERDICTS = [VERDICT.MALICIOUS.value]
-
-    # Time span between script iterations (seconds) default: 3 hours
-    TIME_SPAN = 10800
-
-    # Runtime mode for script
-    # If selected as CLI, script works only once, you need to create cron job for continuos processing
-    # If selected as DOCKER, scripts works continuously with TIME_SPAN above
+    TIME_SPAN = 1110800
     RUNTIME_MODE = RUNTIME_MODE.DOCKER
-    
-    # Open case if sample cannot be submitted to VMRay or downloaded from CrowdStrike
-    SUBMIT_OR_DOWNLOAD_ERROR_OPEN_CASE = False

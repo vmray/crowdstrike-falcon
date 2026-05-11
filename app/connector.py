@@ -1,274 +1,258 @@
-import logging as log
+"""Entry point for the VMRay Connector for CrowdStrike Falcon.
+
+Orchestrates the full pipeline: fetching quarantines and detections from
+CrowdStrike, checking and submitting samples to VMRay, and writing analysis
+results (comments, IOC indicators) back to CrowdStrike.
+"""
+
+import logging
 import pathlib
 import time
 import os
-from config.vmray_conf import VMRAY_API_KEY_TYPE
 
 from config.general_conf import GeneralConfig, RUNTIME_MODE, VERDICT
 from config.crowdstrike_conf import CrowdStrikeConfig, DATA_SOURCE
 from config.vmray_conf import VMRayConfig
+from config.constants import QUARANTINE_ACTION_UNRELEASE, QUARANTINE_ACTION_RELEASE
 from lib.VMRay import VMRay
 from lib.CrowdStrike import CrowdStrike, Sample
 
+logger = logging.getLogger(__name__)
+
+
+def _setup_logging():
+    """Configure the root logger with a file handler and a stream handler."""
+    log_format = '%(asctime)s [PID %(process)d] %(name)s:%(lineno)d %(levelname)s %(message)s'
+    logging.basicConfig(
+        level=GeneralConfig.LOG_LEVEL,
+        format=log_format,
+        handlers=[
+            logging.FileHandler(GeneralConfig.LOG_FILE_PATH),
+            logging.StreamHandler(),
+        ],
+    )
+
 
 def run():
-    if not GeneralConfig.LOG_DIR.exists():
-        GeneralConfig.LOG_DIR.mkdir()
+    """Execute one full connector run.
 
-    if not GeneralConfig.LOG_FILE_PATH.exists():
-        GeneralConfig.LOG_FILE_PATH.touch()
+    Performs the following steps in order:
 
-    if not CrowdStrikeConfig.DOWNLOAD_DIR_PATH.exists():
-        CrowdStrikeConfig.DOWNLOAD_DIR_PATH.mkdir()
+    1. Ensures the log and download directories exist.
+    2. Configures logging.
+    3. Authenticates CrowdStrike and VMRay API clients.
+    4. Fetches quarantines and/or detections from the configured data sources.
+    5. Checks each unique hash against the VMRay database; caches results or
+       queues for (re)submission as appropriate.
+    6. Downloads, submits, and waits for VMRay analysis of new samples.
+    7. For each successfully analysed sample:
 
-    # Configure logging
-    log.basicConfig(filename=GeneralConfig.LOG_FILE_PATH,
-                    format='[%(asctime)s] [<pid:%(process)d> %(filename)s:%(lineno)s %(funcName)s] %(levelname)s %(message)s',
-                    level=GeneralConfig.LOG_LEVEL)
-    log.info(
-        '[CONNECTOR.PY] Started VMRAY Analyzer Connector for CrowdStrike Falcon')
+       - Posts structured comments to matched detections (if configured).
+       - Creates CrowdStrike IOCs for malicious verdicts.
+       - Updates quarantine disposition and adds a comment (if configured).
 
-    # Initializing and authenticating api instances
+    8. Cleans up downloaded ZIP and extracted sample files.
+    """
+    GeneralConfig.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    GeneralConfig.LOG_FILE_PATH.touch(exist_ok=True)
+    CrowdStrikeConfig.DOWNLOAD_DIR_PATH.mkdir(parents=True, exist_ok=True)
+    _setup_logging()
+
+    logger.info("VMRay Connector for CrowdStrike Falcon starting")
+
+    # --- API client initialisation ---
     try:
-        cs = CrowdStrike(log)
+        cs = CrowdStrike()
     except Exception as e:
+        logger.error(f"Failed to initialise CrowdStrike API client: {e}")
         return
-    vmray = VMRay(log)
 
-    # Creating list object for quarantines
+    try:
+        vmray = VMRay()
+    except Exception as e:
+        logger.error(f"Failed to initialise VMRay API client: {e}")
+        return
+
     quarantines = []
-    
-    # Creating list object for detects
     detects = []
-    
-    # Creating set object for sha256 hash values
     hash_list = set()
-    
-    # Creating list object for sample objects
     sample_list = []
-    
-    # List of samples which found on VMRay database
     found_samples = []
-
-    # List of samples which need to be downloaded from CrowdStrike
     download_samples = []
-
-    # List of samples which found on VMRay database but will be resubmitted
     resubmit_samples = []
+    quarantine_hashes = set()
+    detect_hashes = set()
 
+    # --- Fetch from CrowdStrike ---
     if DATA_SOURCE.QUARANTINE in CrowdStrikeConfig.SELECTED_DATA_SOURCES:
-        # Retrieving quarantine files from CrowdStrike
         try:
             quarantines.extend(cs.get_quarantines())
-            log.info(f"Extracted hash from quarantines: {cs.extract_hash_from_quarantines(quarantines)}")
-            hash_list.update(cs.extract_hash_from_quarantines(quarantines))
+            quarantine_hashes.update(cs.extract_hash_from_quarantines(quarantines))
+            logger.info(f"Quarantines: retrieved {len(quarantines)} item(s), {len(quarantine_hashes)} unique hash(es)")
+            hash_list.update(quarantine_hashes)
         except Exception as e:
-            log.error(
-                f"An error occurred while retrieving quarantines from CrowdStrike: {e}")
+            logger.error(f"Failed to retrieve quarantines from CrowdStrike: {e}")
 
-    if DATA_SOURCE.DETECT in CrowdStrikeConfig.SELECTED_DATA_SOURCES:
-        # Retrieving detects from CrowdStrike
+    if DATA_SOURCE.ALERT in CrowdStrikeConfig.SELECTED_DATA_SOURCES:
         try:
-            detects.extend(cs.get_detects())
-            log.info(f"Extracted hash from detects: {cs.extract_hashes_from_detects(detects)}")
-            hash_list.update(cs.extract_hashes_from_detects(detects))
+            detects.extend(cs.get_alerts())
+            detect_hashes.update(cs.extract_hashes_from_alerts(detects))
+            logger.info(f"Detections: retrieved {len(detects)} alert(s), {len(detect_hashes)} unique hash(es)")
+            hash_list.update(detect_hashes)
         except Exception as e:
-            log.error(
-                f"An error occurred while retrieving detects from CrowdStrike: {e}")
-            
-    # Checking found hashes on CrowdStrike, if no hash has been found no need to proceed
-    if len(hash_list) == 0:
-        if len(CrowdStrikeConfig.SELECTED_DATA_SOURCES) > 0:
-            log.warning(
-                f"No evidence hash was found on CrowdStrike. Selected data sources: {', '.join([str(data_source.value) for data_source in CrowdStrikeConfig.SELECTED_DATA_SOURCES])}")
+            logger.error(f"Failed to retrieve detections from CrowdStrike: {e}")
+
+    if not hash_list:
+        if CrowdStrikeConfig.SELECTED_DATA_SOURCES:
+            sources = ', '.join(s.value for s in CrowdStrikeConfig.SELECTED_DATA_SOURCES)
+            logger.warning(f"No hashes found across configured data sources ({sources}) — nothing to process")
         else:
-            log.warning("No data source was selected on CrowdStrike")
+            logger.warning("No data sources configured — nothing to process")
         return
-        
+
     for sample_hash in hash_list:
         sample_list.append(Sample(sample_sha256=sample_hash))
+
+    logger.info(f"Number of samples to process: {len(hash_list)}")
+
     try:
-        # Checking hash values in VMRay database
+        # --- VMRay database lookup ---
         for sample in sample_list:
             sample_summary = vmray.get_sample_summary(sample.sample_sha256)
-            
             if sample_summary is not None:
                 sample_metadata = vmray.parse_sample_summary_data(sample_summary)
-                
-                #set sample verdict acording to vmray verdict
-                if sample_metadata['sample_verdict'] == 'malicious':
+                verdict_str = sample_metadata.get('sample_verdict', '')
+                if verdict_str == VERDICT.MALICIOUS.value:
                     sample.vmray_verdict = VERDICT.MALICIOUS
-                elif sample_metadata['sample_verdict'] == 'suspicious':
+                elif verdict_str == VERDICT.SUSPICIOUS.value:
                     sample.vmray_verdict = VERDICT.SUSPICIOUS
                 else:
                     sample.vmray_verdict = VERDICT.CLEAN
-                    
-                # If resubmission is active and sample verdicts in configured resubmission verdicts
-                # Hash added into resubmit samples and re-analyzed
+
                 if VMRayConfig.RESUBMIT and sample.vmray_verdict in VMRayConfig.RESUBMISSION_VERDICTS:
-                    log.debug(f"File {sample.sample_sha256} found in VMRay database, but will be resubmitted.")
+                    logger.info(f"Sample {sample.sample_sha256} found in VMRay (verdict={sample.vmray_verdict.value}) — queued for resubmission")
                     resubmit_samples.append(sample)
                 else:
-                    log.debug(f"File {sample.sample_sha256} found in VMRay database. No need to submit again.")
+                    logger.info(f"Sample {sample.sample_sha256} found in VMRay (verdict={sample.vmray_verdict.value}) — no resubmission")
                     sample.downloaded_successfully = True
-                    sample.submitted_successfully = True
                     sample.vmray_submit_successfully = True
-                    vmray.add_sample_results(sample)
+                    sample.vmray_submission_finished = True
+                    try:
+                        vmray.add_sample_results(sample, sample_summary)
+                    except Exception as e:
+                        logger.error(f"Failed to populate results for {sample.sample_sha256}: {e}", exc_info=True)
                     found_samples.append(sample)
             else:
                 download_samples.append(sample)
-                
-        if len(found_samples) > 0:
-            log.info(f"{len(found_samples)} samples found on VMRay database")
 
-        if len(resubmit_samples) > 0:
-            log.info(
-                f"{len(resubmit_samples)} samples found on VMRay database, but will be resubmitted")
-            
-        # Combine download_samples array and resubmit_samples array for submission
+        if found_samples:
+            logger.info(f"{len(found_samples)} sample(s) found from VMRay database")
+        if resubmit_samples:
+            logger.info(f"{len(resubmit_samples)} sample(s) found in VMRay database but scheduled for resubmission")
+
         download_samples.extend(resubmit_samples)
 
-        if len(download_samples) > 0:
-            log.info(
-                f"{len(download_samples)} samples need to be downloaded and submitted")
+        # --- Download and submit ---
+        if download_samples:
+            logger.info(f"{len(download_samples)} sample(s) to download and submit to VMRay")
             for sample in download_samples:
                 cs.download_malware_sample(sample)
-        
+
         for sample in download_samples:
             if sample.downloaded_successfully:
                 vmray.submit_sample(sample)
 
-        #Waiting submissions
         vmray.wait_submissions(download_samples)
         found_samples.extend(download_samples)
-        
-        # Actions for found samples on VMRay database
+
+        # --- Write results back to CrowdStrike ---
         for sample in found_samples:
-            # relevant detection and quarantine objects for sample
-            detection_objs = []
-            relevant_hosts_ids = set()
-            quarantine_obj = None
-            
-            for detection in detects:
-                if detection.included_sha256 == sample.sample_sha256:
-                    detection_objs.append(detection)
-                    relevant_hosts_ids.add(cs.export_host_from_detection(detection))
-                
-            for quarantine in quarantines:
-                if quarantine.sha256_hash == sample.sample_sha256:
-                    quarantine_obj = quarantine
-                    relevant_hosts_ids.add(quarantine_obj.quarantine_host_id)
-                    break
-            
-            # check if sample downloaded and submitted successfully
+            detection_objs = [d for d in detects if d.included_sha256 == sample.sample_sha256]
+            quarantine_obj = next((q for q in quarantines if q.sha256_hash == sample.sample_sha256), None)
+
             if not sample.downloaded_successfully:
-                if GeneralConfig.SUBMIT_OR_DOWNLOAD_ERROR_OPEN_CASE:
-                    for detection in detection_objs:
-                        cs.open_case(sample, detection.detect_id)
+                logger.warning(f"Skipping actions for {sample.sample_sha256}: download failed")
                 continue
             if not sample.vmray_submit_successfully:
-                if GeneralConfig.SUBMIT_OR_DOWNLOAD_ERROR_OPEN_CASE:
-                    for detection in detection_objs:
-                        cs.open_case(sample, detection.detect_id)
+                logger.warning(f"Skipping actions for {sample.sample_sha256}: VMRay submission failed")
                 continue
-            
-            # add comment to detection and detirmine status if clean closed, if suspicious in progress, if malicious in progress
-            if CrowdStrikeConfig.COMMMENT_TO_DETECTION:
+            if not sample.vmray_submission_finished:
+                logger.warning(f"Skipping actions for {sample.sample_sha256}: VMRay analysis timed out")
+                continue
+            if not sample.vmray_metadata:
+                logger.warning(f"Skipping actions for {sample.sample_sha256}: no VMRay metadata available")
+                continue
+
+            logger.info(
+                f"Processing results for {sample.sample_sha256}: verdict={sample.vmray_verdict.value}, "
+                f"detections={len(detection_objs)}, quarantine={'yes' if quarantine_obj else 'no'}"
+            )
+
+            if CrowdStrikeConfig.COMMENT_TO_DETECTION and detection_objs:
+                comments = cs.build_detection_comments(sample)
                 for detection in detection_objs:
-                    if sample.vmray_verdict == VERDICT.MALICIOUS:
-                        cs.update_detection(detection.detect_id, 
-                                            comment=f"Vmray sample validation verdict: Malicious. Detailed analysis can be found on VMRAY with the link {sample.vmray_metadata['sample_webif_url']}", 
-                                            status='in_progress')
-                        if CrowdStrikeConfig.ADD_THREAT_CLASSIFICATION and len(list(sample.vmray_result['classifications'])) > 0:
-                            threat_classification = "\n".join(sample.vmray_result['classifications'])
-                            cs.update_detection(detection.detect_id, 
-                                                comment=f"Threat Classification : {threat_classification}", 
-                                                status='in_progress')
-                        if CrowdStrikeConfig.ADD_THREAT_NAME and len(list(sample.vmray_result['threat_names'])) > 0:
-                            threat_names = "\n".join(sample.vmray_result['threat_names'])
-                            cs.update_detection(detection.detect_id, 
-                                                comment=f"Threat Name : {threat_names}", 
-                                                status='in_progress')
-                    if sample.vmray_verdict == VERDICT.SUSPICIOUS:
-                        cs.update_detection(detection.detect_id, 
-                                            comment=f"Vmray sample validation verdict: Suspicious. detailed analysis can be found on VMRAY with  the link {sample.vmray_metadata['sample_webif_url']}", 
-                                            status='in_progress')
-                        if CrowdStrikeConfig.ADD_THREAT_CLASSIFICATION and len(list(sample.vmray_result['classifications'])) > 0:
-                            threat_classification = "\n".join(sample.vmray_result['classifications'])
-                            cs.update_detection(detection.detect_id, 
-                                                comment=f"Threat Classification : {threat_classification}", 
-                                                status='in_progress')
-                        if CrowdStrikeConfig.ADD_THREAT_NAME and len(list(sample.vmray_result['threat_names'])) > 0:
-                            threat_names = "\n".join(sample.vmray_result['threat_names'])                            
-                            cs.update_detection(detection.detect_id, 
-                                                comment=f"Threat Name : {threat_names}", 
-                                                status='in_progress')
-                    if sample.vmray_verdict == VERDICT.CLEAN:
-                        cs.update_detection(detection.detect_id, 
-                                            comment='sample is clean.', 
-                                            status='closed')
-                    
-            # create IOCs
+                    for comment in comments:
+                        cs.update_alert(detection.composite_id, comment=comment)
+                logger.info(
+                    f"Posted comment(s) to {len(detection_objs)} detection(s) for {sample.sample_sha256}"
+                )
+            elif not CrowdStrikeConfig.COMMENT_TO_DETECTION:
+                logger.warning("COMMENT_TO_DETECTION is disabled. Enable it in crowdstrike_conf.py.")
+            else:
+                logger.info("No detection(s) to comment.")
+
             if sample.vmray_verdict == VERDICT.MALICIOUS:
                 cs.create_ioc(sample=sample)
-            
-            # add comment to quarantine and detirmine status if clean release, if malicious delete, if suspicious unrelease
+                logger.info(f"IOC creation completed for {sample.sample_sha256}")
+
             if quarantine_obj is not None and CrowdStrikeConfig.COMMENT_TO_QUARANTINE:
+                webif_url = sample.vmray_metadata.get('sample_webif_url', '')
                 if sample.vmray_verdict == VERDICT.MALICIOUS:
-                    cs.update_quarantine(quarantine_obj.quarantine_id, 
-                                         comment=f"quarantine is malicious. See result on {sample.vmray_metadata['sample_webif_url']}", 
-                                         action='unrelease')
-                if sample.vmray_verdict == VERDICT.SUSPICIOUS:
-                    cs.update_quarantine(quarantine_obj.quarantine_id, 
-                                         comment=f"quarantine is suspicious. See result on {sample.vmray_metadata['sample_webif_url']}", 
-                                         action='unrelease')
-                if sample.vmray_verdict == VERDICT.CLEAN:
-                    cs.update_quarantine(quarantine_obj.quarantine_id, 
-                                         comment='quarantine file is clean.', 
-                                         action='release')
-                        
-            # If sample verdict is malicious or suspicious and contain host
-            if sample.vmray_verdict in CrowdStrikeConfig.CONTAIN_HOST_LEVELS and CrowdStrikeConfig.CONTAIN_HOST:
-                if quarantine_obj is None and len(detection_objs) == 0:
-                    log.warning(f"Sample {sample.sample_sha256} has no detection or quarantine on CrowdStrike.")
-                    continue
-                if len(relevant_hosts_ids) > 0:
-                    for host_id in relevant_hosts_ids:
-                        cs.contain_host(host_id)
+                    cs.update_quarantine(quarantine_obj.quarantine_id,
+                                         comment=f"Quarantine is malicious. See result on {webif_url}",
+                                         action=QUARANTINE_ACTION_UNRELEASE)
+                elif sample.vmray_verdict == VERDICT.SUSPICIOUS:
+                    cs.update_quarantine(quarantine_obj.quarantine_id,
+                                         comment=f"Quarantine is suspicious. See result on {webif_url}",
+                                         action=QUARANTINE_ACTION_UNRELEASE)
+                elif sample.vmray_verdict == VERDICT.CLEAN:
+                    cs.update_quarantine(quarantine_obj.quarantine_id,
+                                         comment='Quarantine file is clean.',
+                                         action=QUARANTINE_ACTION_RELEASE)
+            elif not CrowdStrikeConfig.COMMENT_TO_QUARANTINE:
+                logger.warning("COMMENT_TO_QUARANTINE is disabled. Enable it in crowdstrike_conf.py.")
+            else:
+                logger.info("No quarantine to comment and take action.")
+    except Exception as e:
+        logger.error(f"Error occurred while processing: {e}", exc_info=True)
 
-            # If sample verdict is malicious or suspicious and create_case is active
-            # TODO: Couldn't do POC lack of permission. if any issue occurs in here please open issue 
-            if sample.vmray_verdict in CrowdStrikeConfig.CREATE_CASE_LEVELS and CrowdStrikeConfig.CREATE_CASE:
-                for detection in detection_objs:
-                    cs.open_case(sample, detection.detect_id)
-                
-            # TODO: Find another hosts that has the same sample and do actions
-            if CrowdStrikeConfig.FIND_ANOTHER_HOST and sample.vmray_verdict in CrowdStrikeConfig.FIND_ANOTHER_HOST_LEVELS:
-                host_ids = cs.find_ioc_devices(sample)
-                for host_id in host_ids:
-                    cs.contain_host(host_id)
-                log.info(f"Found {len(host_ids)} devices that have the same sample.")
+    finally:
+        if download_samples:
+            for sample in download_samples:
+                if sample.zipped_path and pathlib.Path(sample.zipped_path).exists():
+                    try:
+                        os.remove(sample.zipped_path)
+                    except OSError as e:
+                        logger.warning(f"Failed to remove {sample.zipped_path}: {e}")
+                if sample.unzipped_path and pathlib.Path(str(sample.unzipped_path)).exists():
+                    try:
+                        os.remove(str(sample.unzipped_path))
+                    except OSError as e:
+                        logger.warning(f"Failed to remove {sample.unzipped_path}: {e}")
+            logger.info("Files cleanup completed.")
 
-    except Exception as err:
-        log.error(f"Unknown error occurred. Error {err}")
-        
-    try:
-        for sample in download_samples:
-            if sample.zipped_path != '' and pathlib.Path(sample.zipped_path).exists():
-                os.remove(sample.zipped_path)
-            if sample.unzipped_path != '' and pathlib.Path(sample.unzipped_path).exists():
-                os.remove(sample.unzipped_path)
-    except Exception as err:
-        log.error(f"Unknown error occurred. Error {err}")
+    logger.info("VMRay connector run completed.")
 
-if __name__ == "__main__":
+
+if __name__ == "__main__":  # pragma: no cover
     if GeneralConfig.RUNTIME_MODE == RUNTIME_MODE.DOCKER:
         while True:
             try:
                 run()
             except Exception as err:
-                continue       
-            log.info(f"Sleeping {GeneralConfig.TIME_SPAN} seconds.")
+                logger.error(f"Connector Run failed: {err}. Retrying...", exc_info=True)
+                continue
+            logger.info(f"Sleeping {GeneralConfig.TIME_SPAN}s until next run")
             time.sleep(GeneralConfig.TIME_SPAN)
 
     elif GeneralConfig.RUNTIME_MODE == RUNTIME_MODE.CLI:
