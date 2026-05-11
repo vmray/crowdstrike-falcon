@@ -41,11 +41,11 @@ class VMRayConfig:
     API_KEY = os.environ.get("VMRAY_API_KEY", "")
     URL = os.environ.get("VMRAY_BASE_URL") or VMRAY_BASE_URL
     CONNECTOR_NAME = "CrowdStrikeCloudConnector"
-    SSL_VERIFY = True
+    SSL_VERIFY = False
     SUBMISSION_COMMENT = "Sample from VMRay CrowdStrike Connector"
     SUBMISSION_TAGS = ["CrowdStrike"]
     ANALYSIS_TIMEOUT = 120
     ANALYSIS_JOB_TIMEOUT = 3600
     POLL_INTERVAL = ANALYSIS_JOB_TIMEOUT // 100
-    RESUBMIT = False
+    RESUBMIT = True
     RESUBMISSION_VERDICTS = [VERDICT.MALICIOUS, VERDICT.SUSPICIOUS]

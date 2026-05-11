@@ -60,7 +60,11 @@ Install the requirements.
 
 Copy `.env.example` to `.env` and populate your credentials:
 
+    # Linux / macOS
     cp .env.example .env
+
+    # Windows (CMD)
+    copy .env.example .env
 
 Edit the [vmray_conf.py](app/config/vmray_conf.py), [general_conf.py](app/config/general_conf.py), and [crowdstrike_conf.py](app/config/crowdstrike_conf.py) files and update with your configurations.
 
@@ -104,7 +108,7 @@ Edit the [vmray_conf.py](app/config/vmray_conf.py), [general_conf.py](app/config
 | `API_KEY`| API Key (set via `VMRAY_API_KEY` env var) |  |
 | `URL`| URL of VMRay instance (override via `VMRAY_BASE_URL` env var) | `https://eu.cloud.vmray.com` |
 | `CONNECTOR_NAME`| User Agent string for VMRay API requests | `CrowdStrikeCloudConnector` |
-| `SSL_VERIFY`| Enable or disable certificate verification [`True`/`False`] | `True` |
+| `SSL_VERIFY`| Enable or disable certificate verification [`True`/`False`] | `False` |
 | `SUBMISSION_COMMENT`| Comment for submitted samples | `Sample from VMRay CrowdStrike Connector` |
 | `SUBMISSION_TAGS`| Tags for submitted samples (no spaces allowed) | `["CrowdStrike"]` |
 | `ANALYSIS_TIMEOUT`| Timeout for individual submission analyses in seconds | `120` |
@@ -141,6 +145,14 @@ The connector must be run from the `app/` directory:
 You can create and start a Docker image with Dockerfile after completing the configurations. You need to set `RUNTIME_MODE` as `RUNTIME_MODE.DOCKER` in the `GeneralConfig`.
 
     docker build -t cs_connector .
+
+    # Linux / macOS
     docker run -d -v $(pwd)/app/log:/app/log --env-file .env -t cs_connector
+
+    # Windows (PowerShell)
+    docker run -d -v ${PWD}/app/log:/app/log --env-file .env -t cs_connector
+
+    # Windows (CMD)
+    docker run -d -v %cd%/app/log:/app/log --env-file .env -t cs_connector
 
 After running the Docker container, you can see connector logs in the log directory on your host machine.
